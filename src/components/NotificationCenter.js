@@ -28,7 +28,7 @@ const NotificationCenter = ({ userId }) => {
 
   // Initialize socket for real-time notifications
   useEffect(() => {
-    const newSocket = io('http://localhost:5002', {
+    const newSocket = io('wss://your-project.up.railway.app', {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
