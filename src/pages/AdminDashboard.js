@@ -156,7 +156,7 @@ const AdminDashboard = () => {
       });
 
       // Also broadcast via Socket.io for real-time
-      const socket = require('socket.io-client')('http://localhost:5002');
+      const socket = require('socket.io-client')('wss://your-project.up.railway.app');
       socket.emit('send-notification', response.data.notification);
       socket.disconnect();
 
