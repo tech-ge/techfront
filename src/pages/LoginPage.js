@@ -79,7 +79,7 @@ const LoginPage = () => {
     setDebugInfo('Testing direct API call...');
     
     try {
-      const response = await fetch('https://your-project.up.railway.app/api/auth/login', {
+      const response = await fetch('https://techback-production.up.railway.app/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
