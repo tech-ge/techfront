@@ -156,7 +156,7 @@ const AdminDashboard = () => {
       });
 
       // Also broadcast via Socket.io for real-time
-      const socket = require('socket.io-client')('https://your-project.up.railway.app');
+      const socket = require('socket.io-client')('https://techback-production.up.railway.app');
       socket.emit('send-notification', response.data.notification);
       socket.disconnect();
 
