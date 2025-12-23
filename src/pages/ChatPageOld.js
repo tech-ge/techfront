@@ -47,12 +47,12 @@ const ChatPage = () => {
     console.log('Initializing socket connection...');
     
     // Connect to Socket.io
-    socket = new WebSocket(`ws://localhost:5002/socket.io/?EIO=4&transport=websocket`);
+    socket = new WebSocket(`wss://your-project.up.railway.app/socket.io/?EIO=4&transport=websocket`);
     
     // Try alternative: using socket.io-client
     try {
       const io = require('socket.io-client');
-      socket = io('http://localhost:5002', {
+      socket = io('https://your-project.up.railway.app', {
         transports: ['websocket', 'polling']
       });
       
