@@ -113,7 +113,7 @@ const ChatPageNew = () => {
   useEffect(() => {
     if (!user) return;
 
-    const newSocket = io('https://your-project.up.railway.app', {
+    const newSocket = io('https://techback-production.up.railway.app', {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 5
