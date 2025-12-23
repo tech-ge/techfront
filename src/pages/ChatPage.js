@@ -79,7 +79,7 @@ const ChatPage = () => {
   useEffect(() => {
     if (!user) return;
 
-    const newSocket = io('https://your-project.up.railway.app', {
+    const newSocket = io('https://techback-production.up.railway.app', {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -507,9 +507,9 @@ const ChatPage = () => {
     if (!url) return '';
     if (url.startsWith('http')) return url;
     // Handle old format URLs from before media route update
-    if (url.startsWith('/uploads')) return `https://your-project.up.railway.app${url}`;
+    if (url.startsWith('/uploads')) return `https://techback-production.up.railway.app${url}`;
     // Handle relative paths
-    return `https://your-project.up.railway.app${url}`;
+    return `https://techback-production.up.railway.app${url}`;
   };
 
   const renderMessage = (msg) => {
