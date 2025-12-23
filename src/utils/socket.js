@@ -9,7 +9,7 @@ class SocketService {
   connect(token) {
     if (this.socket && this.isConnected) return this.socket;
 
-    this.socket = io('http://localhost:5002', {
+    this.socket = io('https://your-project.up.railway.app', {
       auth: { token },
       transports: ['websocket', 'polling']
     });
