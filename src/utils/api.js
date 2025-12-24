@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Use production URL on Vercel, localhost for development
 const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
-  ? 'http://localhost:5002/api'
+  ? 'http://localhost:443/api'
   : 'https://techback-production.up.railway.app/api';
 
 console.log('🔗 API Base URL:', API_BASE_URL);
