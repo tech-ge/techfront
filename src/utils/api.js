@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://techback-production.up.railway.app/api';
+// Use production URL on Vercel, localhost for development
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 'http://localhost:5002/api'
+  : 'https://techback-production.up.railway.app/api';
 
 console.log('🔗 API Base URL:', API_BASE_URL);
 console.log('🌍 Environment:', process.env.REACT_APP_ENV);
