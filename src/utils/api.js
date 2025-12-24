@@ -1,18 +1,14 @@
 import axios from 'axios';
 
-// Production API URL
-
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'https://techback-production.up.railway.app/api';
-console.log('🔗 API Base URL:', API_BASE_URL);
-console.log('🌍 Environment: production');
+// This will use your production backend on Vercel, and localhost only when developing locally
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5002/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   },
-  withCredentials: true,
-  timeout: 30000
+  withCredentials: true
 });
 
 // Request interceptor to add auth token
@@ -22,29 +18,15 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('📤 API Request:', config.method.toUpperCase(), config.url);
     return config;
   },
-  (error) => {
-    console.error('❌ Request Error:', error);
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle errors
+// Response interceptor to handle 401
 api.interceptors.response.use(
-  (response) => {
-    console.log('✅ API Response:', response.status, response.config.url);
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error('❌ Response Error:', {
-      status: error.response?.status,
-      message: error.response?.data?.message,
-      url: error.config?.url,
-      error: error.message
-    });
-    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       window.location.href = '/login';
