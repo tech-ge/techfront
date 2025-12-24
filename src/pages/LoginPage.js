@@ -62,14 +62,14 @@ const LoginPage = () => {
     setError('');
     setDebugInfo('Attempting admin login...');
     
-    const result = await login('admin@techg.com', '@Muthoka2024');
+    const result = await login('admin@example.com', 'Admin@123456');
     
     if (result.success) {
       setDebugInfo('login successful! Redirecting...');
       setTimeout(() => navigate('/admin'), 1000);
     } else {
       setError('login failed: ' + (result.message || 'Unknown error'));
-      setDebugInfo('Check if backend is running on port 5002');
+      setDebugInfo('unknown error');
     }
     
     setLoading(false);
@@ -83,8 +83,8 @@ const LoginPage = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'admin@techg.com',
-          password: '@Muthoka2024'
+          email: 'admin@example.com',
+          password: 'Admin@123456'
         })
       });
       
