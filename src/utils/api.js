@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // This will use your production backend on Vercel, and localhost only when developing locally
-const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5002/api';
+
+const API_BASE_URL = 'https://techback-production.up.railway.app/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
