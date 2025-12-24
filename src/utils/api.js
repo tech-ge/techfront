@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 // Production API URL
-const API_BASE_URL = 'https://techback-production.up.railway.app/api';
 
+const API_BASE_URL = process.env.REACT_APP_BACKEND_URL || 'https://techback-production.up.railway.app/api';
 console.log('🔗 API Base URL:', API_BASE_URL);
 console.log('🌍 Environment: production');
 
