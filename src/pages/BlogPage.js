@@ -764,7 +764,6 @@ const BlogPage = () => {
       {/* Blog Detail Tab — your original beautiful detail view */}
       {tabValue === 1 && selectedBlog && (
         <Box sx={{ mt: 3 }}>
-          {/* Add your full detail view content here */};
           <Paper sx={{ p: 3 }}>
             <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
             <Typography variant="body1">{selectedBlog.content}</Typography>
