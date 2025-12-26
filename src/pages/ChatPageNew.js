@@ -21,9 +21,6 @@ import {
   InputAdornment,
   LinearProgress,
   Badge,
-  Drawer,
-  Fade,
-  Zoom,
   Collapse
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
@@ -38,13 +35,10 @@ import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import CloseIcon from '@mui/icons-material/Close';
 import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
 import StopIcon from '@mui/icons-material/Stop';
-import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import PersonIcon from '@mui/icons-material/Person';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import api from '../utils/api';
 import io from 'socket.io-client';
@@ -67,7 +61,6 @@ const ChatPageNew = () => {
   
   // Admin sidebar states
   const [adminSidebarOpen, setAdminSidebarOpen] = useState(false);
-  const [adminCollapsed, setAdminCollapsed] = useState(false);
   const [adminMinimized, setAdminMinimized] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
   const [unreadAdminMessages, setUnreadAdminMessages] = useState(0);
@@ -82,76 +75,16 @@ const ChatPageNew = () => {
   
   // Refs
   const messagesEndRef = useRef(null);
-  const directMessagesEndRef = useRef(null);
+  const directContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingIntervalRef = useRef(null);
 
-  // Format time like WhatsApp
-  const formatMessageTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return date.toLocaleDateString();
-  };
+  // ========== YOUR EXISTING FUNCTIONS ==========
 
-  const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  // Fetch data and setup socket
-  useEffect(() => {
-    fetchMessages();
-    fetchDirectMessages();
-    
-    // Socket setup (keep your existing socket code)
-    if (!user) return;
-
-    const newSocket = io('https://techback-production.up.railway.app', {
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5
-    });
-
-    // ... your existing socket event listeners ...
-    // Add unread message counter
-    newSocket.on('new-direct-message', (messageData) => {
-      if (messageData && messageData.id) {
-        setDirectMessages(prev => [...prev, messageData]);
-        if (!adminSidebarOpen || adminMinimized) {
-          setUnreadAdminMessages(prev => prev + 1);
-        }
-      }
-    });
-
-    setSocket(newSocket);
-
-    return () => newSocket.disconnect();
-  }, [user]);
-
-  // Auto-scroll for public chat
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Auto-scroll for admin chat when open
-  useEffect(() => {
-    if (adminSidebarOpen && !adminMinimized) {
-      directMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [directMessages, adminSidebarOpen, adminMinimized]);
-
+  // Fetch messages
   const fetchMessages = async () => {
     try {
       setLoading(true);
@@ -174,240 +107,315 @@ const ChatPageNew = () => {
     }
   };
 
-  // WhatsApp-style message bubble component
-  const MessageBubble = ({ message, isOwn }) => {
-    const [showTimestamp, setShowTimestamp] = useState(false);
-    
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: isOwn ? 'flex-end' : 'flex-start',
-          mb: 2,
-          px: 1
-        }}
-      >
-        {/* Other person's avatar (only for others' messages) */}
-        {!isOwn && (
-          <Avatar 
-            sx={{ 
-              width: 32, 
-              height: 32, 
-              mr: 1,
-              alignSelf: 'flex-end',
-              bgcolor: message.senderRole === 'admin' ? '#d32f2f' : '#1976d2'
-            }}
-          >
-            {message.senderName?.charAt(0)?.toUpperCase() || 'U'}
-          </Avatar>
-        )}
+  // Initialize socket
+  useEffect(() => {
+    if (!user) return;
+
+    const newSocket = io('https://techback-production.up.railway.app', {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+    newSocket.on('connect', () => {
+      newSocket.emit('join-chat', {
+        userId: user.id,
+        username: user.name,
+        role: user.role
+      });
+    });
+
+    newSocket.on('new-message', (messageData) => {
+      if (messageData && messageData.id) {
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === messageData.id);
+          return exists ? prev : [...prev, messageData];
+        });
+      }
+    });
+
+    newSocket.on('new-direct-message', (messageData) => {
+      if (messageData && messageData.id) {
+        setDirectMessages(prev => [...prev, messageData]);
+        if (!adminSidebarOpen || adminMinimized) {
+          setUnreadAdminMessages(prev => prev + 1);
+        }
+      }
+    });
+
+    newSocket.on('message-deleted', (deletedId) => {
+      setMessages(prev => prev.filter(m => m.id !== deletedId));
+    });
+
+    newSocket.on('message-edited', (updatedMsg) => {
+      setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+    });
+
+    newSocket.on('message-reaction', (data) => {
+      if (data.messageId && data.userId !== user.id) {
+        setMessageReactions(prev => ({
+          ...prev,
+          [data.messageId]: data.reaction
+        }));
+      }
+    });
+
+    newSocket.on('message-reported', (data) => {
+      if (data.messageId) {
+        setMessages(prev => prev.map(m => 
+          m.id === data.messageId 
+            ? { ...m, reported: true } 
+            : m
+        ));
+      }
+    });
+
+    newSocket.on('admin-online', (isOnline) => {
+      setAdminOnline(isOnline);
+    });
+
+    setSocket(newSocket);
+
+    return () => newSocket.disconnect();
+  }, [user, adminSidebarOpen, adminMinimized]);
+
+  // Auto-scroll
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    if (adminSidebarOpen && !adminMinimized) {
+      directContainerRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [directMessages, adminSidebarOpen, adminMinimized]);
+
+  // Media handling
+  const handleMediaSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be less than 10MB');
+      return;
+    }
+
+    try {
+      setMediaUploading(true);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await api.post('/chat/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          setUploadProgress(percentCompleted);
+        }
+      });
+
+      if (response.data.success) {
+        setSelectedMedia(response.data.file);
+        setUploadProgress(0);
+        setSuccess('Media uploaded! Now send message or add text.');
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to upload media');
+    } finally {
+      setMediaUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  // Voice recording
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        {/* Message bubble */}
-        <Box
-          sx={{
-            maxWidth: '70%',
-            position: 'relative',
-            '&:hover .message-timestamp': {
-              opacity: 1
-            }
-          }}
-        >
-          {!isOwn && (
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                display: 'block', 
-                ml: 1, 
-                mb: 0.5,
-                color: '#666',
-                fontSize: '0.75rem'
-              }}
-            >
-              {message.senderName}
-              {message.senderRole === 'admin' && ' • Admin'}
-            </Typography>
-          )}
-          
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1.5,
-              backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
-              borderRadius: isOwn 
-                ? '18px 4px 18px 18px' 
-                : '4px 18px 18px 18px',
-              border: isOwn ? 'none' : '1px solid #E0E0E0',
-              position: 'relative',
-              '&:hover': {
-                boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-              }
-            }}
-            onMouseEnter={() => setShowTimestamp(true)}
-            onMouseLeave={() => setShowTimestamp(false)}
-          >
-            {/* Reply indicator */}
-            {message.replyingTo && (
-              <Box sx={{
-                p: 1,
-                mb: 1,
-                backgroundColor: 'rgba(0,0,0,0.05)',
-                borderLeft: '3px solid #128C7E',
-                borderRadius: '8px 0 0 8px',
-                fontSize: '0.85rem'
-              }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: '#128C7E' }}>
-                  ↻ Reply
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-                  {message.replyingTo?.content?.substring(0, 50)}...
-                </Typography>
-              </Box>
-            )}
-            
-            {/* Message content */}
-            {renderMessageContent(message)}
-            
-            {/* Timestamp and status */}
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'flex-end', 
-              alignItems: 'center',
-              mt: 0.5,
-              gap: 0.5
-            }}>
-              <Typography 
-                variant="caption" 
-                className="message-timestamp"
-                sx={{ 
-                  color: isOwn ? '#128C7E' : '#666',
-                  fontSize: '0.7rem',
-                  opacity: showTimestamp ? 1 : 0.7,
-                  transition: 'opacity 0.2s'
-                }}
-              >
-                {formatTimestamp(message.timestamp)}
-              </Typography>
-              
-              {isOwn && (
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: '#128C7E',
-                    fontSize: '0.7rem'
-                  }}
-                >
-                  ✓✓
-                </Typography>
-              )}
-              
-              {message.edited && (
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: '#666',
-                    fontSize: '0.7rem',
-                    fontStyle: 'italic'
-                  }}
-                >
-                  Edited
-                </Typography>
-              )}
-            </Box>
-          </Paper>
-          
-          {/* Message actions (appear on hover) */}
-          <Box sx={{
-            position: 'absolute',
-            top: -8,
-            right: isOwn ? 'auto' : -30,
-            left: isOwn ? -30 : 'auto',
-            display: 'flex',
-            gap: 0.5,
-            opacity: 0,
-            transition: 'opacity 0.2s',
-            '&:hover': { opacity: 1 }
-          }}>
-            <Tooltip title="Reply">
-              <IconButton
-                size="small"
-                onClick={() => setReplyingTo(message)}
-                sx={{ 
-                  backgroundColor: 'white',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                  '&:hover': { backgroundColor: '#f5f5f5' }
-                }}
-              >
-                <ReplyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            
-            {isOwn && (
-              <Tooltip title="Delete">
-                <IconButton
-                  size="small"
-                  onClick={() => deleteMessage(message.id)}
-                  sx={{ 
-                    backgroundColor: 'white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    '&:hover': { backgroundColor: '#f5f5f5' }
-                  }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Box>
-        </Box>
-      </Box>
-    );
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob, `voice-note-${Date.now()}.webm`);
+
+          const response = await api.post('/chat/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+
+          if (response.data.success) {
+            setSelectedMedia(response.data.file);
+            setSuccess('Voice note recorded! Ready to send.');
+            setTimeout(() => setSuccess(''), 2000);
+          }
+        } catch (err) {
+          setError('Failed to upload voice note');
+        }
+
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      setError('Microphone access denied');
+    }
   };
 
-  // Admin message bubble (smaller, different style)
-  const AdminMessageBubble = ({ message }) => {
-    const isOwn = message.sender === user?.id;
-    
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: isOwn ? 'flex-end' : 'flex-start',
-          mb: 1.5,
-          px: 0.5
-        }}
-      >
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1,
-            backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
-            borderRadius: isOwn 
-              ? '12px 4px 12px 12px' 
-              : '4px 12px 12px 12px',
-            border: isOwn ? 'none' : '1px solid #E0E0E0',
-            maxWidth: '85%'
-          }}
-        >
-          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-            {message.content}
-          </Typography>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              display: 'block', 
-              textAlign: 'right',
-              color: '#666',
-              fontSize: '0.65rem',
-              mt: 0.5
-            }}
-          >
-            {formatTimestamp(message.timestamp)}
-          </Typography>
-        </Paper>
-      </Box>
-    );
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      clearInterval(recordingIntervalRef.current);
+    }
   };
 
-  // Render message content (media/files)
+  // Send message functions
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
+    if ((!newMessage.trim() && !selectedMedia) || !user) return;
+
+    try {
+      setSending(true);
+      const payload = {
+        content: newMessage,
+        senderName: user.name,
+        replyingTo: replyingTo?.id || null,
+        mentions: extractMentions(newMessage),
+        media: selectedMedia || null
+      };
+
+      // Optimistic update
+      const optimisticMessage = {
+        id: Date.now().toString(),
+        sender: user.id,
+        senderName: user.name,
+        senderRole: user.role,
+        content: newMessage,
+        media: selectedMedia || null,
+        timestamp: new Date().toISOString(),
+        edited: false,
+        isDeleted: false,
+        replyingTo: replyingTo?.id || null,
+        mentions: extractMentions(newMessage)
+      };
+      setMessages(prev => [...prev, optimisticMessage]);
+
+      const response = await api.post('/messages', payload);
+      
+      socket?.emit('send-message', {
+        ...response.data.data,
+        userId: user.id
+      });
+      
+      setNewMessage('');
+      setSelectedMedia(null);
+      setReplyingTo(null);
+      setSuccess('Message sent!');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send message');
+      setMessages(prev => prev.slice(0, -1));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSendDirectMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!newDirectMessage.trim() || !user) return;
+
+    try {
+      setSending(true);
+      const payload = {
+        content: newDirectMessage,
+        senderName: user.name
+      };
+
+      // Optimistic update
+      const optimisticMsg = {
+        id: Date.now().toString(),
+        sender: user.id,
+        senderName: user.name,
+        content: newDirectMessage,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        replyTo: null
+      };
+      setDirectMessages(prev => [...prev, optimisticMsg]);
+
+      const response = await api.post('/messages/direct', payload);
+      
+      socket?.emit('send-direct-message', response.data.data);
+      
+      setNewDirectMessage('');
+      setSuccess('Message sent to admin');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send message');
+      setDirectMessages(prev => prev.slice(0, -1));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // Helper functions
+  const extractMentions = (text) => {
+    const mentionPattern = /@(\w+)/g;
+    const matches = text.match(mentionPattern);
+    return matches ? matches.map(m => m.substring(1)) : [];
+  };
+
+  const deleteMessage = async (messageId) => {
+    try {
+      await api.delete(`/messages/${messageId}`);
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      socket?.emit('message-deleted', messageId);
+      setSuccess('Message deleted');
+      setTimeout(() => setSuccess(''), 2000);
+    } catch (err) {
+      setError('Failed to delete message');
+    }
+  };
+
+  const reportMessage = async (messageId, reason = 'Inappropriate content') => {
+    try {
+      await api.post(`/messages/${messageId}/report`, { reason });
+      socket?.emit('message-reported', { 
+        messageId,
+        reason,
+        reportedBy: user?.id
+      });
+      setSuccess('Message reported successfully');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError('Failed to report message');
+    }
+  };
+
+  // ========== WHATSAPP UI FUNCTIONS ==========
+
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   const renderMessageContent = (msg) => {
     if (msg.media) {
       const isImage = msg.media.mimeType.startsWith('image/');
@@ -474,8 +482,214 @@ const ChatPageNew = () => {
     );
   };
 
-  // Keep your existing functions (handleSendMessage, handleSendDirectMessage, etc.)
-  // ... [Keep all your existing functions here, they work fine] ...
+  // WhatsApp Message Bubble Component
+  const MessageBubble = ({ message, isOwn }) => {
+    const [showTimestamp, setShowTimestamp] = useState(false);
+    
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: isOwn ? 'flex-end' : 'flex-start',
+          mb: 2,
+          px: 1
+        }}
+      >
+        {!isOwn && (
+          <Avatar 
+            sx={{ 
+              width: 32, 
+              height: 32, 
+              mr: 1,
+              alignSelf: 'flex-end',
+              bgcolor: message.senderRole === 'admin' ? '#d32f2f' : '#1976d2'
+            }}
+          >
+            {message.senderName?.charAt(0)?.toUpperCase() || 'U'}
+          </Avatar>
+        )}
+        
+        <Box
+          sx={{
+            maxWidth: '70%',
+            position: 'relative',
+            '&:hover .message-actions': {
+              opacity: 1
+            }
+          }}
+        >
+          {!isOwn && (
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                display: 'block', 
+                ml: 1, 
+                mb: 0.5,
+                color: '#666',
+                fontSize: '0.75rem'
+              }}
+            >
+              {message.senderName}
+              {message.senderRole === 'admin' && ' • Admin'}
+            </Typography>
+          )}
+          
+          <Paper
+            elevation={0}
+            sx={{
+              p: 1.5,
+              backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
+              borderRadius: isOwn 
+                ? '18px 4px 18px 18px' 
+                : '4px 18px 18px 18px',
+              border: isOwn ? 'none' : '1px solid #E0E0E0',
+              position: 'relative',
+              '&:hover': {
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
+              }
+            }}
+            onMouseEnter={() => setShowTimestamp(true)}
+            onMouseLeave={() => setShowTimestamp(false)}
+          >
+            {renderMessageContent(message)}
+            
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'flex-end', 
+              alignItems: 'center',
+              mt: 0.5,
+              gap: 0.5
+            }}>
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: isOwn ? '#128C7E' : '#666',
+                  fontSize: '0.7rem',
+                  opacity: showTimestamp ? 1 : 0.7,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                {formatTimestamp(message.timestamp)}
+              </Typography>
+              
+              {isOwn && (
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: '#128C7E',
+                    fontSize: '0.7rem'
+                  }}
+                >
+                  ✓✓
+                </Typography>
+              )}
+              
+              {message.edited && (
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: '#666',
+                    fontSize: '0.7rem',
+                    fontStyle: 'italic'
+                  }}
+                >
+                  Edited
+                </Typography>
+              )}
+            </Box>
+          </Paper>
+          
+          {/* Message actions */}
+          <Box className="message-actions" sx={{
+            position: 'absolute',
+            top: -8,
+            right: isOwn ? 'auto' : -30,
+            left: isOwn ? -30 : 'auto',
+            display: 'flex',
+            gap: 0.5,
+            opacity: 0,
+            transition: 'opacity 0.2s',
+            '&:hover': { opacity: 1 }
+          }}>
+            <Tooltip title="Reply">
+              <IconButton
+                size="small"
+                onClick={() => setReplyingTo(message)}
+                sx={{ 
+                  backgroundColor: 'white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  '&:hover': { backgroundColor: '#f5f5f5' }
+                }}
+              >
+                <ReplyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            
+            {isOwn && (
+              <Tooltip title="Delete">
+                <IconButton
+                  size="small"
+                  onClick={() => deleteMessage(message.id)}
+                  sx={{ 
+                    backgroundColor: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    '&:hover': { backgroundColor: '#f5f5f5' }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
+  // Admin message bubble
+  const AdminMessageBubble = ({ message }) => {
+    const isOwn = message.sender === user?.id;
+    
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: isOwn ? 'flex-end' : 'flex-start',
+          mb: 1.5,
+          px: 0.5
+        }}
+      >
+        <Paper
+          elevation={0}
+          sx={{
+            p: 1,
+            backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
+            borderRadius: isOwn 
+              ? '12px 4px 12px 12px' 
+              : '4px 12px 12px 12px',
+            border: isOwn ? 'none' : '1px solid #E0E0E0',
+            maxWidth: '85%'
+          }}
+        >
+          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
+            {message.content}
+          </Typography>
+          <Typography 
+            variant="caption" 
+            sx={{ 
+              display: 'block', 
+              textAlign: 'right',
+              color: '#666',
+              fontSize: '0.65rem',
+              mt: 0.5
+            }}
+          >
+            {formatTimestamp(message.timestamp)}
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  };
 
   if (loading) {
     return (
@@ -496,7 +710,7 @@ const ChatPageNew = () => {
       overflow: 'hidden'
     }}>
       
-      {/* Main Chat Area (WhatsApp-style) */}
+      {/* Main Chat Area */}
       <Box sx={{ 
         flex: 1, 
         display: 'flex', 
@@ -529,7 +743,6 @@ const ChatPageNew = () => {
             </Box>
           </Box>
           
-          {/* Admin Chat Toggle Button */}
           <Tooltip title={adminSidebarOpen ? "Hide Admin Chat" : "Show Admin Chat"}>
             <Badge 
               badgeContent={unreadAdminMessages} 
@@ -653,7 +866,6 @@ const ChatPageNew = () => {
           )}
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {/* Media buttons */}
             <input
               type="file"
               ref={fileInputRef}
@@ -671,7 +883,6 @@ const ChatPageNew = () => {
               </IconButton>
             </Tooltip>
             
-            {/* Voice recording button */}
             <Tooltip title={isRecording ? `Recording ${recordingTime}s` : 'Record Voice Note'}>
               <IconButton
                 size="small"
@@ -691,7 +902,6 @@ const ChatPageNew = () => {
               </IconButton>
             </Tooltip>
 
-            {/* Message input */}
             <TextField
               size="small"
               fullWidth
@@ -711,9 +921,7 @@ const ChatPageNew = () => {
               }}
             />
 
-            {/* Send button */}
             <Button
-              type="submit"
               variant="contained"
               onClick={handleSendMessage}
               disabled={sending || mediaUploading || (!newMessage.trim() && !selectedMedia)}
@@ -734,7 +942,7 @@ const ChatPageNew = () => {
         </Paper>
       </Box>
 
-      {/* Admin Chat Sidebar (Collapsible) */}
+      {/* Admin Chat Sidebar */}
       <Collapse 
         in={adminSidebarOpen} 
         orientation="horizontal"
@@ -828,7 +1036,7 @@ const ChatPageNew = () => {
             )}
           </Box>
 
-          {/* Admin Messages (only when not minimized) */}
+          {/* Admin Messages */}
           {!adminMinimized && (
             <>
               <Box
@@ -862,11 +1070,11 @@ const ChatPageNew = () => {
                     <AdminMessageBubble key={msg.id} message={msg} />
                   ))
                 )}
-                <div ref={directMessagesEndRef} />
+                <div ref={messagesEndRef} />
               </Box>
 
               {/* Admin Input */}
-              <Box component="form" onSubmit={handleSendDirectMessage} sx={{ 
+              <Box sx={{ 
                 p: 1.5, 
                 borderTop: '1px solid #ddd',
                 backgroundColor: 'white'
@@ -888,9 +1096,9 @@ const ChatPageNew = () => {
                     }}
                   />
                   <Button
-                    type="submit"
                     variant="contained"
                     color="error"
+                    onClick={handleSendDirectMessage}
                     disabled={sending || !newDirectMessage.trim()}
                     sx={{
                       minWidth: 'auto',
@@ -908,7 +1116,7 @@ const ChatPageNew = () => {
         </Paper>
       </Collapse>
 
-      {/* Admin Chat Minimized Button (when completely closed) */}
+      {/* Admin Chat Minimized Button */}
       {!adminSidebarOpen && (
         <Tooltip title="Admin Support" placement="left">
           <Badge 
