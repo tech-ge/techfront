@@ -764,7 +764,7 @@ const BlogPage = () => {
       {/* Blog Detail Tab — your original beautiful detail view */}
       {tabValue === 1 && selectedBlog && (
         // ... your full detail view code (keep exactly as is)
-      )}
+      )};
 
       {/* My Blogs Tab */}
       {tabValue === 2 && user && (
