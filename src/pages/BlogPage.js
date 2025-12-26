@@ -36,6 +36,8 @@ import SendIcon from '@mui/icons-material/Send';
 import CodeIcon from '@mui/icons-material/Code';
 import ArticleIcon from '@mui/icons-material/Article';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SyntaxHighlighter from 'react-syntax-highlighter';
+import { tomorrowNight } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import api from '../utils/api';
 import { initSocket } from '../utils/socket';
 
@@ -150,7 +152,15 @@ const BlogPage = () => {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      setError('File too large  save to upload');
+      setError('File too large — max 10MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreview(event.target.result);
+      setPreviewType(file.type.startsWith('image/') ? 'image' : 'video');
+      setSuccess('Preview loaded — save to upload');
       setTimeout(() => setSuccess(''), 3000);
     };
     reader.onerror = () => setError('Failed to read file');
@@ -352,42 +362,13 @@ const BlogPage = () => {
   };
 
   const renderCodePreview = () => {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          * { margin: 0; padding: 0; }
-          ${codeCss}
-        </style>
-      </head>
-      <body>
-        ${codeHtml}
-        <script>${codeJs}</script>
-      </body>
-      </html>
-    `;
+    const codeToShow = codeHtml || codeCss || codeJs || '// No code yet';
+    const language = codeHtml ? 'html' : codeCss ? 'css' : 'javascript';
 
     return (
-      <Box
-        sx={{
-          border: '1px solid #10d84cff',
-          borderRadius: 1,
-          overflow: 'hidden',
-          minHeight: 400,
-          mt: 2
-        }}
-      >
-        <iframe
-          srcDoc={html}
-          style={{
-            width: '100%',
-            height: '400px',
-            border: 'none'
-          }}
-          title="Code Preview"
-        />
-      </Box>
+      <SyntaxHighlighter language={language} style={tomorrowNight}>
+        {codeToShow}
+      </SyntaxHighlighter>
     );
   };
 
@@ -418,47 +399,321 @@ const BlogPage = () => {
       )}
       {success && (
         <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>
-           {new Date(comment.createdAt).toLocaleDateString()}
-                    </Typography>
-                    {(comment.author?._id === user?._id || isAdmin) && (
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteComment(comment._id)}
-                        sx={{ mt: 1 }}
-                      >
-                        Delete
-                      </Button>
-                    )}
-                  </Box>
+          ✓ {success}
+        </Alert>
+      )}
+
+      <Tabs value={tabValue} onChange={(e, val) => setTabValue(val)}>
+        <Tab label="All Blogs" />
+        <Tab label="Blog Detail" disabled={!selectedBlog} />
+        {user && <Tab label="My Blogs" />}
+      </Tabs>
+
+      {/* All Blogs Tab */}
+      {tabValue === 0 && (
+        <Box sx={{ mt: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
+            <TextField
+              placeholder="Search blogs..."
+              size="small"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={{ flex: 1, minWidth: 200 }}
+            />
+            {getAllTags().length > 0 && (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label="All Tags"
+                  onClick={() => setSelectedTag('')}
+                  variant={selectedTag === '' ? 'filled' : 'outlined'}
+                />
+                {getAllTags().map(tag => (
+                  <Chip
+                    key={tag}
+                    label={tag}
+                    onClick={() => setSelectedTag(tag)}
+                    variant={selectedTag === tag ? 'filled' : 'outlined'}
+                  />
                 ))}
               </Box>
             )}
-            
             {user && (
-              <Box sx={{ mt: 3 }}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  placeholder="Add a comment..."
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  sx={{ mb: 2 }}
-                />
-                <Button
-                  variant="contained"
-                  onClick={handleAddComment}
-                  disabled={submittingComment || !commentText.trim()}
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleOpenCreate}
+              >
+                New Blog
+              </Button>
+            )}
+          </Box>
+
+          {loading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, color: '#666' }}>
+              <CircularProgress size={20} />
+              <Typography variant="caption">Loading blogs...</Typography>
+            </Box>
+          )}
+
+          {blogs.length === 0 && !loading ? (
+            <Paper sx={{ p: 3, textAlign: 'center' }}>
+              <Typography>No blogs found</Typography>
+            </Paper>
+          ) : (
+            <Box sx={{ maxWidth: '900px', mx: 'auto' }}>
+              {blogs.map(blog => (
+                <Paper
+                  key={blog._id}
+                  sx={{
+                    mb: 3,
+                    p: 2.5,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      backgroundColor: '#fafafa'
+                    },
+                    display: 'grid',
+                    gridTemplateColumns: 'calc(100% - 200px) 180px',
+                    gap: 2,
+                    '@media (max-width: 900px)': {
+                      gridTemplateColumns: '1fr',
+                    }
+                  }}
+                  onClick={() => fetchBlogDetail(blog._id)}
                 >
-                  {submittingComment ? 'Posting...' : 'Post Comment'}
-                </Button>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      {blog.contentType === 'code' ? <CodeIcon fontSize="small" color="primary" /> : <ArticleIcon fontSize="small" color="primary" />}
+                      <Typography variant="caption" color="success.main" sx={{ fontWeight: 600 }}>
+                        {blog.authorName}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        mb: 1,
+                        fontWeight: 500,
+                        color: '#1a0dff',
+                        '&:hover': { textDecoration: 'underline' },
+                        fontSize: '1.3rem',
+                        lineHeight: 1.3
+                      }}
+                    >
+                      {blog.title}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{
+                        mb: 1.5,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.6,
+                        fontSize: '0.95rem'
+                      }}
+                    >
+                      {blog.content}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1.5, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(blog.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, color: 'text.secondary' }}>
+                        <VisibilityIcon sx={{ fontSize: 14 }} /> {blog.views || 0}
+                      </Typography>
+                    </Box>
+                    {blog.tags && blog.tags.length > 0 && (
+                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                        {blog.tags.slice(0, 3).map(tag => (
+                          <Chip
+                            key={tag}
+                            label={tag}
+                            size="small"
+                            variant="outlined"
+                            sx={{ height: '20px', fontSize: '0.75rem' }}
+                          />
+                        ))}
+                        {blog.tags.length > 3 && (
+                          <Typography variant="caption" sx={{ alignSelf: 'center', ml: 0.5 }}>
+                            +{blog.tags.length - 3} more
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                    {(blog.author?._id === user?._id || isAdmin) && (
+                      <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid #eee', display: 'flex', gap: 0.5 }}>
+                        <Button
+                          size="small"
+                          startIcon={<EditIcon />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditBlog(blog);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="small"
+                          startIcon={<DeleteIcon />}
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBlog(blog._id);
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </Box>
+                    )}
+                    <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid #eee', display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReaction(blog._id, 'like');
+                        }}
+                        sx={{
+                          color: userReactions[blog._id] === 'like' ? '#1976d2' : '#666',
+                          fontWeight: userReactions[blog._id] === 'like' ? 600 : 400,
+                          '&:hover': { color: '#1976d2' }
+                        }}
+                        startIcon={userReactions[blog._id] === 'like' ? '👍' : '🤍'}
+                      >
+                        {blog.likes || 0} Like
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReaction(blog._id, 'love');
+                        }}
+                        sx={{
+                          color: userReactions[blog._id] === 'love' ? '#e91e63' : '#666',
+                          fontWeight: userReactions[blog._id] === 'love' ? 600 : 400,
+                          '&:hover': { color: '#e91e63' }
+                        }}
+                        startIcon={userReactions[blog._id] === 'love' ? '❤️' : '🤍'}
+                      >
+                        {blog.loves || 0} Love
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReaction(blog._id, 'dislike');
+                        }}
+                        sx={{
+                          color: userReactions[blog._id] === 'dislike' ? '#f44336' : '#666',
+                          fontWeight: userReactions[blog._id] === 'dislike' ? 600 : 400,
+                          '&:hover': { color: '#f44336' }
+                        }}
+                        startIcon={userReactions[blog._id] === 'dislike' ? '👎' : '🤍'}
+                      >
+                        {blog.dislikes || 0} Dislike
+                      </Button>
+                    </Box>
+                  </Box>
+                  <Box
+                    sx={{
+                      width: '180px',
+                      height: '140px',
+                      backgroundColor: '#f0f0f0',
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      position: 'relative',
+                      border: '1px solid #e0e0e0',
+                      cursor: 'pointer',
+                      '&:hover': {
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                      },
+                      '@media (max-width: 900px)': {
+                        width: '100%',
+                        height: '200px',
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {blog.preview ? (
+                      blog.previewType === 'image' ? (
+                        <Box
+                          component="img"
+                          src={blog.preview}
+                          alt={blog.title}
+                          sx={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            borderRadius: 1,
+                            cursor: 'pointer',
+                            transition: 'transform 0.2s ease',
+                            '&:hover': { transform: 'scale(1.05)' }
+                          }}
+                          onClick={() => window.open(blog.preview, '_blank')}
+                        />
+                      ) : (
+                        <Box
+                          sx={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#000'
+                          }}
+                        >
+                          <Box
+                            component="video"
+                            src={blog.preview}
+                            sx={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              borderRadius: 1
+                            }}
+                            controls
+                          />
+                        </Box>
+                      )
+                    ) : (
+                      <ArticleIcon sx={{ fontSize: 60, color: '#ccc' }} />
+                    )}
+                  </Box>
+                </Paper>
+              ))}
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Blog Detail Tab */}
+      {tabValue === 1 && selectedBlog && (
+        <Box sx={{ mt: 3 }}>
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
+            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
+              {selectedBlog.content}
+            </Typography>
+            {selectedBlog.contentType === 'code' && (
+              <Box sx={{ mt: 4 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>Code Preview</Typography>
+                <SyntaxHighlighter language="javascript" style={tomorrowNight}>
+                  {selectedBlog.codeJs || selectedBlog.codeHtml || selectedBlog.codeCss || '// No code'}
+                </SyntaxHighlighter>
               </Box>
             )}
+            {/* Comments and other detail content */}
           </Paper>
         </Box>
       )}
 
+      {/* My Blogs Tab */}
       {tabValue === 2 && user && (
         <Box sx={{ mt: 3 }}>
           <Button
@@ -469,7 +724,6 @@ const BlogPage = () => {
           >
             New Blog
           </Button>
-
           {myBlogs.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography>You haven't created any blogs yet</Typography>
@@ -486,8 +740,8 @@ const BlogPage = () => {
                       </Typography>
                     </Box>
                     <Box>
-                      <Button size="small" onClick={() => fetchBlogDetail(blog._id)} sx={{ mr: 1 }}>View</Button>
-                      <Button size="small" onClick={() => handleEditBlog(blog)} sx={{ mr: 1 }}>Edit</Button>
+                      <Button size="small" onClick={() => fetchBlogDetail(blog._id)}>View</Button>
+                      <Button size="small" onClick={() => handleEditBlog(blog)}>Edit</Button>
                       <Button size="small" color="error" onClick={() => handleDeleteBlog(blog._id)}>Delete</Button>
                     </Box>
                   </Paper>
@@ -498,6 +752,7 @@ const BlogPage = () => {
         </Box>
       )}
 
+      {/* Create/Edit Dialog */}
       <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>{editingBlog ? 'Edit Blog' : 'Create New Blog'}</DialogTitle>
         <DialogContent>
@@ -509,19 +764,16 @@ const BlogPage = () => {
             margin="normal"
             required
           />
-          
           <TextField
             fullWidth
             label="Tags (comma separated)"
             value={blogTags}
             onChange={(e) => setBlogTags(e.target.value)}
             margin="normal"
-            helperText="Enter tags separated by commas"
           />
-          
           <Box sx={{ my: 2 }}>
             <Typography variant="subtitle2">Content Type:</Typography>
-            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+            <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant={contentType === 'richtext' ? 'contained' : 'outlined'}
                 onClick={() => setContentType('richtext')}
@@ -536,7 +788,6 @@ const BlogPage = () => {
               </Button>
             </Box>
           </Box>
-          
           {contentType === 'richtext' ? (
             <TextField
               fullWidth
@@ -579,7 +830,6 @@ const BlogPage = () => {
               />
             </Box>
           )}
-          
           <Box sx={{ mt: 3 }}>
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
               Preview Image/Video (Optional, max 10MB):
@@ -601,13 +851,12 @@ const BlogPage = () => {
               </Box>
             )}
           </Box>
-
           {contentType === 'code' && (
             <Button onClick={() => setCodePreview(!codePreview)} sx={{ mt: 2 }}>
               {codePreview ? 'Hide Preview' : 'Show Preview'}
             </Button>
           )}
-          {codePreview && contentType === 'code' && renderCodePreview()}
+          {codePreview && renderCodePreview()}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
