@@ -317,25 +317,30 @@ const BlogPage = () => {
     }
   };
 
-  const handleReaction = async (blogId, reactionType) => {
-    if (!user) {
-      setError('Please login to react to blogs');
-      return;
-    }
-    try {
-      const currentReaction = userReactions[blogId];
-      const newReaction = currentReaction === reactionType ? null : reactionType;
-      setUserReactions(prev => ({
-        ...prev,
-        [blogId]: newReaction
-      });
-      const socket = initSocket();
-      socket?.emit('blog-reaction', {
-        blogId,
-        reactionType: newReaction,
-        userId: user?.id,
-        userName: user?.name
-      });
+ const handleReaction = async (blogId, reactionType) => {
+  if (!user) {
+    setError('Please login to react to blogs');
+    return;
+  }
+  try {
+    const currentReaction = userReactions[blogId];
+    const newReaction = currentReaction === reactionType ? null : reactionType;
+    setUserReactions(prev => ({
+      ...prev,
+      [blogId]: newReaction
+    }));
+    const socket = initSocket();
+    socket?.emit('blog-reaction', {
+      blogId,
+      reactionType: newReaction,
+      userId: user?.id,
+      userName: user?.name
+    });
+  } catch (err) {
+    setError('Failed to save reaction');
+    console.error('Reaction error:', err);
+  }
+};
       const response = await api.post(`/blog/${blogId}/react`, { reactionType: newReaction });
      
       if (response.data.success) {
