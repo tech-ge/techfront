@@ -726,7 +726,7 @@ const BlogPage = () => {
         <Box sx={{ mt: 3 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
-            <Typography variant="body1" sx={{ mb: 3 }}>{selectedBlog.content}</Typography>
+            <Typography variant="body1" sx={{ mb: 3, whiteSpace: 'pre-wrap' }}>{selectedBlog.content}</Typography>
             
             {selectedBlog.tags && selectedBlog.tags.length > 0 && (
               <Box sx={{ mb: 3 }}>
