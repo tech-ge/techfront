@@ -93,7 +93,6 @@ const BlogPage = () => {
     const socket = initSocket();
    
     socket?.on('blog-reaction', (data) => {
-      // Update blogs with new reaction data
       if (data.blogId && data.userId !== user?.id) {
         setBlogs(prev => prev.map(blog =>
           blog.id === data.blogId
@@ -103,15 +102,12 @@ const BlogPage = () => {
       }
     });
     socket?.on('new-blog', (blogData) => {
-      // Add new blog to the top of the list
       setBlogs(prev => [blogData, ...prev]);
     });
     socket?.on('blog-deleted', (blogId) => {
-      // Remove deleted blog from list
       setBlogs(prev => prev.filter(b => b.id !== blogId));
     });
     socket?.on('blog-updated', (updatedBlog) => {
-      // Update blog in list
       setBlogs(prev => prev.map(b => b.id === updatedBlog.id ? updatedBlog : b));
     });
     return () => {
@@ -140,7 +136,6 @@ const BlogPage = () => {
       const response = await api.get(`/blog?${params}`);
       setBlogs(response.data.blogs || []);
      
-      // Scroll to top after refresh
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       console.error('Failed to fetch blogs:', err);
@@ -161,13 +156,12 @@ const BlogPage = () => {
     }
   };
 
-  // ONLY CHANGE: Base64 preview upload (MongoDB only)
+  // Base64 preview upload (MongoDB only)
   const handlePreviewUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Optional: limit size
-    if (file.size > 10 * 1024 * 1024) { // 10MB
+    if (file.size > 10 * 1024 * 1024) {
       setError('File too large — max 10MB');
       return;
     }
@@ -204,7 +198,6 @@ const BlogPage = () => {
       const response = await api.post('/blog', payload);
       setSuccess('Blog created successfully!');
      
-      // Reset form
       setBlogTitle('');
       setBlogContent('');
       setBlogTags('');
@@ -216,7 +209,6 @@ const BlogPage = () => {
       setPreviewType('');
       setOpenCreateDialog(false);
      
-      // Refresh blogs
       fetchBlogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -317,32 +309,27 @@ const BlogPage = () => {
     }
   };
 
- const handleReaction = async (blogId, reactionType) => {
-  if (!user) {
-    setError('Please login to react to blogs');
-    return;
-  }
-  try {
-    const currentReaction = userReactions[blogId];
-    const newReaction = currentReaction === reactionType ? null : reactionType;
-    setUserReactions(prev => ({
-      ...prev,
-      [blogId]: newReaction
-    }));
-    const socket = initSocket();
-    socket?.emit('blog-reaction', {
-      blogId,
-      reactionType: newReaction,
-      userId: user?.id,
-      userName: user?.name
-    });
-  } catch (err) {
-    setError('Failed to save reaction');
-    console.error('Reaction error:', err);
-  }
-};
+  // FIXED handleReaction — syntax error fixed
+  const handleReaction = async (blogId, reactionType) => {
+    if (!user) {
+      setError('Please login to react to blogs');
+      return;
+    }
+    try {
+      const currentReaction = userReactions[blogId];
+      const newReaction = currentReaction === reactionType ? null : reactionType;
+      setUserReactions(prev => ({
+        ...prev,
+        [blogId]: newReaction
+      }));
+      const socket = initSocket();
+      socket?.emit('blog-reaction', {
+        blogId,
+        reactionType: newReaction,
+        userId: user?.id,
+        userName: user?.name
+      });
       const response = await api.post(`/blog/${blogId}/react`, { reactionType: newReaction });
-     
       if (response.data.success) {
         setBlogs(prev => prev.map(b =>
           b.id === blogId ? response.data.blog : b
@@ -731,7 +718,6 @@ const BlogPage = () => {
                             e.target.style.display = 'none';
                           }}
                           onClick={() => {
-                            // Show image modal
                             window.open(blog.preview, '_blank');
                           }}
                         />
@@ -830,7 +816,7 @@ const BlogPage = () => {
                   <Tab label="Code" />
                   <Tab label="Preview" />
                 </Tabs>
-               
+              
                 {!codePreview ? (
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="subtitle2">HTML:</Typography>
@@ -935,7 +921,7 @@ const BlogPage = () => {
           >
             New Blog
           </Button>
-         
+        
           {blogs.filter(b => b.author === user.id).length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography>You haven't created any blogs yet</Typography>
@@ -1054,7 +1040,7 @@ const BlogPage = () => {
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: '#333' }}>
               📸 Preview Image or Video (Like Google Search Results)
             </Typography>
-           
+          
             <Box sx={{ mb: 2 }}>
               <input
                 type="file"
