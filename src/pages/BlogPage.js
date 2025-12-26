@@ -1691,46 +1691,32 @@ const BlogPage = () => {
             </Box>
           </Box>
           
-                        {/* Markdown Toolbar */}
-          {markdownMode && contentType !== 'code' && (
-            <Paper sx={{ p: 1, mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Tooltip title="Bold">
-                <IconButton size="small" onClick={() => insertMarkdown('bold')}>
+                                    {/* Markdown Toolbar - Temporarily removed for debugging */}
+            {markdownMode && contentType !== 'code' && (
+              <Paper sx={{ p: 1, mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <IconButton size="small" onClick={() => insertMarkdown('bold')} title="Bold">
                   <FormatBoldIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Italic">
-                <IconButton size="small" onClick={() => insertMarkdown('italic')}>
+                <IconButton size="small" onClick={() => insertMarkdown('italic')} title="Italic">
                   <FormatItalicIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Bullet List">
-                <IconButton size="small" onClick={() => insertMarkdown('list')}>
+                <IconButton size="small" onClick={() => insertMarkdown('list')} title="Bullet List">
                   <FormatListBulletedIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Numbered List">
-                <IconButton size="small" onClick={() => insertMarkdown('orderedList')}>
+                <IconButton size="small" onClick={() => insertMarkdown('orderedList')} title="Numbered List">
                   <FormatListNumberedIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Quote">
-                <IconButton size="small" onClick={() => insertMarkdown('quote')}>
+                <IconButton size="small" onClick={() => insertMarkdown('quote')} title="Quote">
                   <FormatQuoteIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Link">
-                <IconButton size="small" onClick={() => insertMarkdown('link')}>
+                <IconButton size="small" onClick={() => insertMarkdown('link')} title="Link">
                   <InsertLinkIcon />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Image">
-                <IconButton size="small" onClick={() => insertMarkdown('image')}>
+                <IconButton size="small" onClick={() => insertMarkdown('image')} title="Image">
                   <InsertPhotoIcon />
                 </IconButton>
-              </Tooltip>
-            </Paper>
-          )}
+              </Paper>
+            )}
           
           {/* Content Area */}
           {contentType === 'richtext' ? (
