@@ -100,6 +100,7 @@ const BlogPage = () => {
     socket?.on('blog-updated', (updatedBlog) => {
       setBlogs(prev => prev.map(b => b._id === updatedBlog._id ? updatedBlog : b));
     });
+    
 
     return () => {
       socket?.off('blog-reaction');
