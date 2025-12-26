@@ -40,21 +40,22 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
+            {/* Public routes without layout */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
+            
+            {/* Routes with MainLayout */}
+            <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
             <Route path="/blogs" element={<MainLayout><BlogPage /></MainLayout>} />
             <Route path="/blogs/:id" element={<MainLayout><BlogPage /></MainLayout>} />
-            
-            {/* Protected user routes */}
             <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
             <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
             <Route path="/chat" element={<MainLayout><ChatPageNew /></MainLayout>} />
             <Route path="/users" element={<MainLayout><UsersBrowsePage /></MainLayout>} />
-            
-            {/* Admin routes */}
             <Route path="/admin" element={<MainLayout><AdminDashboard /></MainLayout>} />
+            
+            {/* Catch-all route */}
+            <Route path="*" element={<MainLayout><HomePage /></MainLayout>} />
           </Routes>
         </Router>
       </AuthProvider>
