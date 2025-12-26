@@ -238,7 +238,7 @@ const MainLayout = ({ children }) => {
         }}
       >
         <Container maxWidth="lg">
-          <Typography variant="body2" color="text.secondary" align="center">
+          <Typography variant="body2" color="#17A2B8" align="center">
             © {new Date().getFullYear()} TechG — Kenyan Science Students Collaboration Platform
           </Typography>
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
