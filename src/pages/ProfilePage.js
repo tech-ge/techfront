@@ -25,9 +25,10 @@ const ProfilePage = () => {
   const { user, setUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -52,34 +53,32 @@ const ProfilePage = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check if file is image
     if (!file.type.startsWith('image/')) {
       setError('Please select an image file');
       return;
     }
 
-    // Check aspect ratio is 1:1 (square)
+    // Check aspect ratio (square)
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const aspectRatio = img.width / img.height;
         if (aspectRatio < 0.9 || aspectRatio > 1.1) {
-          setError(`Profile photo must be square (1:1). Current: ${aspectRatio.toFixed(2)}:1`);
+          setError(`Profile photo must be square (1:1). Current ratio: ${aspectRatio.toFixed(2)}:1`);
           return;
         }
 
-        // Convert to base64
         const base64 = event.target.result;
         setFormData(prev => ({
           ...prev,
           profilePhoto: base64
         }));
         setError('');
+        setSuccess('Photo selected — click Save to upload');
+        setTimeout(() => setSuccess(''), 3000);
       };
-      img.onerror = () => {
-        setError('Invalid image file');
-      };
+      img.onerror = () => setError('Invalid image');
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
@@ -91,15 +90,14 @@ const ProfilePage = () => {
       setError('');
       setSuccess('');
 
-      // Validate age
       const ageNum = parseInt(formData.age);
-      if (ageNum < 18 || ageNum > 100) {
+      if (isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
         setError('Age must be between 18 and 100');
         setLoading(false);
         return;
       }
 
-      const response = await api.put('/auth/profile', {
+      const response = await api.put('/users/profile', {  // ← CHANGED TO /users/profile
         name: formData.name,
         age: ageNum,
         location: formData.location,
@@ -110,11 +108,12 @@ const ProfilePage = () => {
 
       if (response.data.success) {
         setUser(response.data.user);
-        setSuccess('Profile updated successfully!');
+        setSuccess('Profile updated successfully! Photo saved.');
         setEditing(false);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update profile');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -134,6 +133,7 @@ const ProfilePage = () => {
     });
     setEditing(false);
     setError('');
+    setSuccess('');
   };
 
   if (!user) {
@@ -151,11 +151,11 @@ const ProfilePage = () => {
           My Profile
         </Typography>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+        {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
+        {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>{success}</Alert>}
 
         <Grid container spacing={3}>
-          {/* Profile Photo Section */}
+          {/* Profile Photo */}
           <Grid item xs={12} sm={4} sx={{ textAlign: 'center' }}>
             <Box sx={{ position: 'relative', display: 'inline-block' }}>
               <Avatar
@@ -165,10 +165,11 @@ const ProfilePage = () => {
                   fontSize: '3rem',
                   bgcolor: 'primary.main'
                 }}
-                src={formData.profilePhoto}
+                src={formData.profilePhoto || undefined}
               >
-                {user?.name?.charAt(0).toUpperCase()}
+                {formData.name?.charAt(0).toUpperCase() || 'U'}
               </Avatar>
+
               {editing && (
                 <Button
                   component="label"
@@ -195,14 +196,15 @@ const ProfilePage = () => {
                 </Button>
               )}
             </Box>
-            {editing && formData.profilePhoto && (
+
+            {editing && formData.profilePhoto && !formData.profilePhoto.startsWith('http') && (
               <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'success.main' }}>
-                ✓ Photo selected (must be square 1x1)
+                ✓ New photo ready to save
               </Typography>
             )}
           </Grid>
 
-          {/* Profile Info Section */}
+          {/* Profile Form */}
           <Grid item xs={12} sm={8}>
             <Box sx={{ mb: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -225,7 +227,7 @@ const ProfilePage = () => {
                       onClick={handleSave}
                       disabled={loading}
                     >
-                      Save
+                      {loading ? 'Saving...' : 'Save'}
                     </Button>
                     <Button
                       variant="outlined"
@@ -238,12 +240,9 @@ const ProfilePage = () => {
                   </Box>
                 )}
               </Box>
-
-              {loading && <CircularProgress size={24} sx={{ mr: 1 }} />}
             </Box>
 
             <Grid container spacing={2}>
-              {/* Name */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -255,8 +254,6 @@ const ProfilePage = () => {
                   variant={editing ? 'outlined' : 'standard'}
                 />
               </Grid>
-
-              {/* Email (read-only) */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -267,8 +264,6 @@ const ProfilePage = () => {
                   helperText="Email cannot be changed"
                 />
               </Grid>
-
-              {/* Age */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -282,8 +277,6 @@ const ProfilePage = () => {
                   inputProps={{ min: 18, max: 100 }}
                 />
               </Grid>
-
-              {/* Phone */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -295,8 +288,6 @@ const ProfilePage = () => {
                   variant={editing ? 'outlined' : 'standard'}
                 />
               </Grid>
-
-              {/* Location */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -308,8 +299,6 @@ const ProfilePage = () => {
                   variant={editing ? 'outlined' : 'standard'}
                 />
               </Grid>
-
-              {/* University */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -317,11 +306,8 @@ const ProfilePage = () => {
                   value={formData.university}
                   disabled
                   variant="standard"
-                  helperText="Cannot be changed"
                 />
               </Grid>
-
-              {/* Course */}
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
@@ -329,11 +315,8 @@ const ProfilePage = () => {
                   value={formData.course}
                   disabled
                   variant="standard"
-                  helperText="Cannot be changed"
                 />
               </Grid>
-
-              {/* About */}
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -355,7 +338,6 @@ const ProfilePage = () => {
 
         <Divider sx={{ my: 4 }} />
 
-        {/* Account Stats */}
         <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
           Account Details
         </Typography>
@@ -363,10 +345,8 @@ const ProfilePage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
-                  Status
-                </Typography>
-                <Typography variant="h6" sx={{ textTransform: 'capitalize', color: user?.status === 'active' ? 'success.main' : 'warning.main' }}>
+                <Typography color="textSecondary" gutterBottom>Status</Typography>
+                <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
                   {user?.status || 'Unknown'}
                 </Typography>
               </CardContent>
@@ -375,10 +355,8 @@ const ProfilePage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
-                  Role
-                </Typography>
-                <Typography variant="h6" sx={{ textTransform: 'capitalize', color: user?.role === 'admin' ? 'error.main' : 'primary.main' }}>
+                <Typography color="textSecondary" gutterBottom>Role</Typography>
+                <Typography variant="h6" sx={{ textTransform: 'capitalize' }}>
                   {user?.role || 'User'}
                 </Typography>
               </CardContent>
@@ -387,9 +365,7 @@ const ProfilePage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
-                  Member Since
-                </Typography>
+                <Typography color="textSecondary" gutterBottom>Member Since</Typography>
                 <Typography variant="body2">
                   {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                 </Typography>
@@ -399,10 +375,8 @@ const ProfilePage = () => {
           <Grid item xs={12} sm={6} md={3}>
             <Card>
               <CardContent sx={{ textAlign: 'center' }}>
-                <Typography color="textSecondary" gutterBottom>
-                  User ID
-                </Typography>
-                <Typography variant="caption">{user?.id || 'N/A'}</Typography>
+                <Typography color="textSecondary" gutterBottom>User ID</Typography>
+                <Typography variant="caption">{user?._id || 'N/A'}</Typography>
               </CardContent>
             </Card>
           </Grid>
