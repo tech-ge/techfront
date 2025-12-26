@@ -1691,7 +1691,7 @@ const BlogPage = () => {
             </Box>
           </Box>
           
-          {/* Markdown Toolbar */}
+            {/* Markdown Toolbar */}
           {markdownMode && contentType !== 'code' && (
             <Paper sx={{ p: 1, mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               <Tooltip title="Bold">
@@ -1728,7 +1728,6 @@ const BlogPage = () => {
                 <IconButton size="small" onClick={() => insertMarkdown('image')}>
                   <InsertPhotoIcon />
                 </IconButton>
-              </IconButton>
               </Tooltip>
             </Paper>
           )}
