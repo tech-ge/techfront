@@ -254,10 +254,10 @@ const UsersBrowsePage = () => {
               </Box>
 
               <CardContent sx={{ p: 0.75, flex: 1 }}>
-                <Typography variant="caption" sx={{ fontWeight: 'bold', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {userData.name}
+                <Typography variant="caption" sx={{ fontWeight: 'bold', color: '#b30000', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                 🕵️ {userData.name}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#666', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Typography variant="caption" sx={{ color: '#66ff66', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   📍 {userData.location || 'Unknown'}
                 </Typography>
               </CardContent>
