@@ -58,7 +58,6 @@ const ProfilePage = () => {
       return;
     }
 
-    // Check aspect ratio (square)
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
@@ -97,7 +96,8 @@ const ProfilePage = () => {
         return;
       }
 
-      const response = await api.put('/users/profile', {  // ← CHANGED TO /users/profile
+      // FIXED: Using correct endpoint /api/users/profile
+      const response = await api.put('/users/profile', {
         name: formData.name,
         age: ageNum,
         location: formData.location,
