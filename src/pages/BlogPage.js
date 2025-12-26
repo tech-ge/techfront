@@ -763,8 +763,15 @@ const BlogPage = () => {
 
       {/* Blog Detail Tab — your original beautiful detail view */}
       {tabValue === 1 && selectedBlog && (
-        // ... your full detail view code (keep exactly as is)
-      )};
+        <Box sx={{ mt: 3 }}>
+          {/* Add your full detail view content here */}
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
+            <Typography variant="body1">{selectedBlog.content}</Typography>
+            {/* Add the rest of your detail view JSX */}
+          </Paper>
+        </Box>
+      )}
 
       {/* My Blogs Tab */}
       {tabValue === 2 && user && (
@@ -807,7 +814,145 @@ const BlogPage = () => {
       )}
 
       {/* Create/Edit Dialog — your original beautiful form */}
-      {/* ... keep your full dialog with base64 preview upload */}
+      <Dialog 
+        open={openCreateDialog} 
+        onClose={() => setOpenCreateDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingBlog ? 'Edit Blog' : 'Create New Blog'}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            label="Title"
+            value={blogTitle}
+            onChange={(e) => setBlogTitle(e.target.value)}
+            margin="normal"
+            required
+          />
+          
+          <TextField
+            fullWidth
+            label="Tags (comma separated)"
+            value={blogTags}
+            onChange={(e) => setBlogTags(e.target.value)}
+            margin="normal"
+            helperText="Enter tags separated by commas"
+          />
+          
+          <Box sx={{ my: 2 }}>
+            <Typography variant="subtitle2">Content Type:</Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant={contentType === 'richtext' ? 'contained' : 'outlined'}
+                onClick={() => setContentType('richtext')}
+              >
+                Rich Text
+              </Button>
+              <Button
+                variant={contentType === 'code' ? 'contained' : 'outlined'}
+                onClick={() => setContentType('code')}
+              >
+                Code
+              </Button>
+            </Box>
+          </Box>
+          
+          {contentType === 'richtext' ? (
+            <TextField
+              fullWidth
+              label="Content"
+              value={blogContent}
+              onChange={(e) => setBlogContent(e.target.value)}
+              margin="normal"
+              multiline
+              rows={8}
+              required
+            />
+          ) : (
+            <Box>
+              <TextField
+                fullWidth
+                label="HTML"
+                value={codeHtml}
+                onChange={(e) => setCodeHtml(e.target.value)}
+                margin="normal"
+                multiline
+                rows={4}
+              />
+              <TextField
+                fullWidth
+                label="CSS"
+                value={codeCss}
+                onChange={(e) => setCodeCss(e.target.value)}
+                margin="normal"
+                multiline
+                rows={4}
+              />
+              <TextField
+                fullWidth
+                label="JavaScript"
+                value={codeJs}
+                onChange={(e) => setCodeJs(e.target.value)}
+                margin="normal"
+                multiline
+                rows={4}
+              />
+              <Button
+                onClick={() => setCodePreview(!codePreview)}
+                sx={{ mt: 2 }}
+              >
+                {codePreview ? 'Hide Preview' : 'Show Preview'}
+              </Button>
+              {codePreview && renderCodePreview()}
+            </Box>
+          )}
+          
+          <Box sx={{ mt: 3 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Preview Image/Video (Optional, max 10MB):
+            </Typography>
+            <input
+              type="file"
+              accept="image/*,video/*"
+              onChange={handlePreviewUpload}
+              style={{ display: 'block', marginBottom: '10px' }}
+            />
+            {preview && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="caption">Preview:</Typography>
+                {previewType === 'image' ? (
+                  <Box
+                    component="img"
+                    src={preview}
+                    alt="Preview"
+                    sx={{ maxWidth: '100%', maxHeight: '200px', mt: 1 }}
+                  />
+                ) : (
+                  <Box
+                    component="video"
+                    src={preview}
+                    controls
+                    sx={{ maxWidth: '100%', maxHeight: '200px', mt: 1 }}
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
+          <Button 
+            onClick={editingBlog ? handleUpdateBlog : handleCreateBlog}
+            variant="contained"
+            disabled={loading}
+          >
+            {loading ? 'Saving...' : (editingBlog ? 'Update' : 'Create')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
