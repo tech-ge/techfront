@@ -233,7 +233,7 @@ const MainLayout = ({ children }) => {
           py: 3,
           px: 2,
           mt: 'auto',
-          backgroundColor: '#0C5460',
+          backgroundColor: '#F1F8E9',
           backdropFilter: 'blur(10px)'
         }}
       >
