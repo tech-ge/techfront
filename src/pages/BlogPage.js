@@ -21,7 +21,11 @@ import {
   Tab,
   Avatar,
   Divider,
-  CircularProgress
+  CircularProgress,
+  InputAdornment,
+  Tooltip,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +40,6 @@ import SendIcon from '@mui/icons-material/Send';
 import CodeIcon from '@mui/icons-material/Code';
 import ArticleIcon from '@mui/icons-material/Article';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import ReactMarkdown from 'react-markdown';
 import api from '../utils/api';
 import { initSocket } from '../utils/socket';
 
@@ -44,46 +47,56 @@ const BlogPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
-
+  
+  // Blog list states
   const [blogs, setBlogs] = useState([]);
   const [selectedBlog, setSelectedBlog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTag, setSelectedTag] = useState('');
-  const [userReactions, setUserReactions] = useState({});
-
+  const [userReactions, setUserReactions] = useState({}); // { blogId: 'like'|'love'|'dislike'|null }
+  
+  // Create/Edit blog states
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [editingBlog, setEditingBlog] = useState(null);
   const [blogTitle, setBlogTitle] = useState('');
   const [blogContent, setBlogContent] = useState('');
   const [blogTags, setBlogTags] = useState('');
-  const [contentType, setContentType] = useState('richtext');
+  const [contentType, setContentType] = useState('richtext'); // 'richtext' or 'code'
   const [preview, setPreview] = useState('');
-  const [previewType, setPreviewType] = useState('');
-
+  const [previewType, setPreviewType] = useState(''); // 'image' or 'video'
+  
+  // Code editor states
   const [codeHtml, setCodeHtml] = useState('');
   const [codeCss, setCodeCss] = useState('');
   const [codeJs, setCodeJs] = useState('');
   const [codePreview, setCodePreview] = useState(false);
-
+  
+  // Comment states
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
-
+  
+  // UI states
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [tabValue, setTabValue] = useState(0);
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [selectedBlogMenu, setSelectedBlogMenu] = useState(null);
 
+  // Fetch blogs
   useEffect(() => {
     fetchBlogs();
   }, [searchTerm, selectedTag]);
 
+  // Set up real-time socket listeners for blog updates
   useEffect(() => {
     const socket = initSocket();
-
+    
     socket?.on('blog-reaction', (data) => {
-      if (data.blogId && data.userId !== user?._id) {
-        setBlogs(prev => prev.map(blog =>
-          blog._id === data.blogId
+      // Update blogs with new reaction data
+      if (data.blogId && data.userId !== user?.id) {
+        setBlogs(prev => prev.map(blog => 
+          blog.id === data.blogId 
             ? { ...blog, reactions: { ...blog.reactions, [data.userId]: data.reactionType } }
             : blog
         ));
@@ -91,17 +104,19 @@ const BlogPage = () => {
     });
 
     socket?.on('new-blog', (blogData) => {
+      // Add new blog to the top of the list
       setBlogs(prev => [blogData, ...prev]);
     });
 
     socket?.on('blog-deleted', (blogId) => {
-      setBlogs(prev => prev.filter(b => b._id !== blogId));
+      // Remove deleted blog from list
+      setBlogs(prev => prev.filter(b => b.id !== blogId));
     });
 
     socket?.on('blog-updated', (updatedBlog) => {
-      setBlogs(prev => prev.map(b => b._id === updatedBlog._id ? updatedBlog : b));
+      // Update blog in list
+      setBlogs(prev => prev.map(b => b.id === updatedBlog.id ? updatedBlog : b));
     });
-    
 
     return () => {
       socket?.off('blog-reaction');
@@ -109,12 +124,14 @@ const BlogPage = () => {
       socket?.off('blog-deleted');
       socket?.off('blog-updated');
     };
-  }, [user?._id]);
+  }, [user?.id]);
 
+  // Auto-refresh blogs every 3 minutes
   useEffect(() => {
     const interval = setInterval(() => {
       fetchBlogs();
-    }, 3 * 60 * 1000);
+    }, 3 * 60 * 1000); // 3 minutes
+
     return () => clearInterval(interval);
   }, [searchTerm, selectedTag]);
 
@@ -124,9 +141,11 @@ const BlogPage = () => {
       const params = new URLSearchParams();
       if (searchTerm) params.append('search', searchTerm);
       if (selectedTag) params.append('tag', selectedTag);
-
+      
       const response = await api.get(`/blog?${params}`);
       setBlogs(response.data.blogs || []);
+      
+      // Scroll to top after refresh
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       console.error('Failed to fetch blogs:', err);
@@ -145,26 +164,6 @@ const BlogPage = () => {
       console.error('Failed to fetch blog:', err);
       setError('Failed to load blog details');
     }
-  };
-
-  const handlePreviewUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-      setError('File too large — max 10MB');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setPreview(event.target.result);
-      setPreviewType(file.type.startsWith('image/') ? 'image' : 'video');
-      setSuccess('Preview loaded — save to upload');
-      setTimeout(() => setSuccess(''), 3000);
-    };
-    reader.onerror = () => setError('Failed to read file');
-    reader.readAsDataURL(file);
   };
 
   const handleCreateBlog = async () => {
@@ -189,6 +188,8 @@ const BlogPage = () => {
 
       const response = await api.post('/blog', payload);
       setSuccess('Blog created successfully!');
+      
+      // Reset form
       setBlogTitle('');
       setBlogContent('');
       setBlogTags('');
@@ -199,6 +200,8 @@ const BlogPage = () => {
       setPreview('');
       setPreviewType('');
       setOpenCreateDialog(false);
+      
+      // Refresh blogs
       fetchBlogs();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -229,14 +232,17 @@ const BlogPage = () => {
         previewType: previewType || null
       };
 
-      const response = await api.put(`/blog/${editingBlog._id}`, payload);
+      const response = await api.put(`/blog/${editingBlog.id}`, payload);
       setSuccess('Blog updated successfully!');
+      
       setOpenCreateDialog(false);
       setEditingBlog(null);
       fetchBlogs();
-      if (selectedBlog?._id === editingBlog._id) {
+      
+      if (selectedBlog?.id === editingBlog.id) {
         setSelectedBlog(response.data.blog);
       }
+      
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update blog');
@@ -247,11 +253,12 @@ const BlogPage = () => {
 
   const handleDeleteBlog = async (blogId) => {
     if (!window.confirm('Are you sure you want to delete this blog?')) return;
+
     try {
       await api.delete(`/blog/${blogId}`);
       setSuccess('Blog deleted successfully!');
       fetchBlogs();
-      if (selectedBlog?._id === blogId) {
+      if (selectedBlog?.id === blogId) {
         setSelectedBlog(null);
         setTabValue(0);
       }
@@ -263,15 +270,18 @@ const BlogPage = () => {
 
   const handleAddComment = async () => {
     if (!commentText.trim() || !selectedBlog) return;
+
     try {
       setSubmittingComment(true);
-      const response = await api.post(`/blog/${selectedBlog._id}/comment`, {
+      const response = await api.post(`/blog/${selectedBlog.id}/comment`, {
         text: commentText
       });
+
       setSelectedBlog(prev => ({
         ...prev,
         comments: [...(prev.comments || []), response.data.comment]
       }));
+      
       setCommentText('');
       setSuccess('Comment added!');
       setTimeout(() => setSuccess(''), 3000);
@@ -284,11 +294,12 @@ const BlogPage = () => {
 
   const handleDeleteComment = async (commentId) => {
     if (!selectedBlog || !window.confirm('Delete this comment?')) return;
+
     try {
-      await api.delete(`/blog/${selectedBlog._id}/comment/${commentId}`);
+      await api.delete(`/blog/${selectedBlog.id}/comment/${commentId}`);
       setSelectedBlog(prev => ({
         ...prev,
-        comments: prev.comments.filter(c => c._id !== commentId)
+        comments: prev.comments.filter(c => c.id !== commentId)
       }));
       setSuccess('Comment deleted!');
       setTimeout(() => setSuccess(''), 3000);
@@ -307,24 +318,28 @@ const BlogPage = () => {
       const currentReaction = userReactions[blogId];
       const newReaction = currentReaction === reactionType ? null : reactionType;
 
+      // Optimistic update
       setUserReactions(prev => ({
         ...prev,
         [blogId]: newReaction
       }));
 
+      // Emit socket event for real-time update
       const socket = initSocket();
       socket?.emit('blog-reaction', {
         blogId,
         reactionType: newReaction,
-        userId: user?._id,
+        userId: user?.id,
         userName: user?.name
       });
 
+      // Update blog with reaction
       const response = await api.post(`/blog/${blogId}/react`, { reactionType: newReaction });
-
+      
+      // Update the blog in the list with the response data (no full refresh needed)
       if (response.data.success) {
-        setBlogs(prev => prev.map(b =>
-          b._id === blogId ? response.data.blog : b
+        setBlogs(prev => prev.map(b => 
+          b.id === blogId ? response.data.blog : b
         ));
       }
     } catch (err) {
@@ -345,6 +360,7 @@ const BlogPage = () => {
     setPreview(blog.preview || '');
     setPreviewType(blog.previewType || '');
     setOpenCreateDialog(true);
+    setMenuAnchor(null);
   };
 
   const handleOpenCreate = () => {
@@ -362,13 +378,42 @@ const BlogPage = () => {
   };
 
   const renderCodePreview = () => {
-    const codeToShow = codeHtml || codeCss || codeJs || '// No code yet';
-    const language = codeHtml ? 'html' : codeCss ? 'css' : 'javascript';
-
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          * { margin: 0; padding: 0; }
+          ${codeCss}
+        </style>
+      </head>
+      <body>
+        ${codeHtml}
+        <script>${codeJs}</script>
+      </body>
+      </html>
+    `;
+    
     return (
-      <SyntaxHighlighter language={language} style={tomorrowNight}>
-        {codeToShow}
-      </SyntaxHighlighter>
+      <Box
+        sx={{
+          border: '1px solid #10d84cff',
+          borderRadius: 1,
+          overflow: 'hidden',
+          minHeight: 400,
+          mt: 2
+        }}
+      >
+        <iframe
+          srcDoc={html}
+          style={{
+            width: '100%',
+            height: '400px',
+            border: 'none'
+          }}
+          title="Code Preview"
+        />
+      </Box>
     );
   };
 
@@ -379,8 +424,6 @@ const BlogPage = () => {
     });
     return Array.from(tags);
   };
-
-  const myBlogs = blogs.filter(blog => blog.author?._id === user?._id);
 
   if (loading && blogs.length === 0) {
     return (
@@ -393,15 +436,38 @@ const BlogPage = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {error && (
-        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
+        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2, animation: 'slideInDown 0.3s ease' }}>
           {error}
         </Alert>
       )}
       {success && (
-        <Alert severity="success" onClose={() => setSuccess('')} sx={{ mb: 2 }}>
-          ✓ {success}
+        <Alert 
+          severity="success" 
+          onClose={() => setSuccess('')} 
+          sx={{ 
+            mb: 2, 
+            animation: 'slideInDown 0.3s ease',
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}
+        >
+          â {success}
         </Alert>
       )}
+      <style>{`
+        @keyframes slideInDown {
+          from {
+            transform: translateY(-20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
 
       <Tabs value={tabValue} onChange={(e, val) => setTabValue(val)}>
         <Tab label="All Blogs" />
@@ -409,7 +475,7 @@ const BlogPage = () => {
         {user && <Tab label="My Blogs" />}
       </Tabs>
 
-      {/* All Blogs Tab */}
+      {/* Blogs List Tab */}
       {tabValue === 0 && (
         <Box sx={{ mt: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -420,6 +486,7 @@ const BlogPage = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               sx={{ flex: 1, minWidth: 200 }}
             />
+            
             {getAllTags().length > 0 && (
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip
@@ -437,6 +504,7 @@ const BlogPage = () => {
                 ))}
               </Box>
             )}
+
             {user && (
               <Button
                 variant="contained"
@@ -450,8 +518,9 @@ const BlogPage = () => {
 
           {loading && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, color: '#666' }}>
-              <CircularProgress size={20} />
+              <Box sx={{ width: 16, height: 16, border: '2px solid #ddd', borderTopColor: '#1976d2', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               <Typography variant="caption">Loading blogs...</Typography>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </Box>
           )}
 
@@ -463,13 +532,13 @@ const BlogPage = () => {
             <Box sx={{ maxWidth: '900px', mx: 'auto' }}>
               {blogs.map(blog => (
                 <Paper
-                  key={blog._id}
+                  key={blog.id}
                   sx={{
                     mb: 3,
                     p: 2.5,
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
-                    '&:hover': {
+                    '&:hover': { 
                       boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                       backgroundColor: '#fafafa'
                     },
@@ -480,8 +549,9 @@ const BlogPage = () => {
                       gridTemplateColumns: '1fr',
                     }
                   }}
-                  onClick={() => fetchBlogDetail(blog._id)}
+                  onClick={() => fetchBlogDetail(blog.id)}
                 >
+                  {/* Content Section */}
                   <Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                       {blog.contentType === 'code' ? <CodeIcon fontSize="small" color="primary" /> : <ArticleIcon fontSize="small" color="primary" />}
@@ -489,11 +559,12 @@ const BlogPage = () => {
                         {blog.authorName}
                       </Typography>
                     </Box>
-                    <Typography
-                      variant="h6"
-                      sx={{
-                        mb: 1,
-                        fontWeight: 500,
+                    
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        mb: 1, 
+                        fontWeight: 500, 
                         color: '#1a0dff',
                         '&:hover': { textDecoration: 'underline' },
                         fontSize: '1.3rem',
@@ -502,14 +573,15 @@ const BlogPage = () => {
                     >
                       {blog.title}
                     </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{
-                        mb: 1.5,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
+
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary" 
+                      sx={{ 
+                        mb: 1.5, 
+                        display: '-webkit-box', 
+                        WebkitLineClamp: 2, 
+                        WebkitBoxOrient: 'vertical', 
                         overflow: 'hidden',
                         lineHeight: 1.6,
                         fontSize: '0.95rem'
@@ -517,6 +589,7 @@ const BlogPage = () => {
                     >
                       {blog.content}
                     </Typography>
+
                     <Box sx={{ display: 'flex', gap: 1.5, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Typography variant="caption" color="text.secondary">
                         {new Date(blog.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -525,13 +598,14 @@ const BlogPage = () => {
                         <VisibilityIcon sx={{ fontSize: 14 }} /> {blog.views || 0}
                       </Typography>
                     </Box>
+
                     {blog.tags && blog.tags.length > 0 && (
                       <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                         {blog.tags.slice(0, 3).map(tag => (
-                          <Chip
-                            key={tag}
-                            label={tag}
-                            size="small"
+                          <Chip 
+                            key={tag} 
+                            label={tag} 
+                            size="small" 
                             variant="outlined"
                             sx={{ height: '20px', fontSize: '0.75rem' }}
                           />
@@ -543,7 +617,8 @@ const BlogPage = () => {
                         )}
                       </Box>
                     )}
-                    {(blog.author?._id === user?._id || isAdmin) && (
+
+                    {(blog.author === user?.id || isAdmin) && (
                       <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid #eee', display: 'flex', gap: 0.5 }}>
                         <Button
                           size="small"
@@ -561,26 +636,28 @@ const BlogPage = () => {
                           color="error"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteBlog(blog._id);
+                            handleDeleteBlog(blog.id);
                           }}
                         >
                           Delete
                         </Button>
                       </Box>
                     )}
+
+                    {/* Reaction Buttons */}
                     <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid #eee', display: 'flex', gap: 1 }}>
                       <Button
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleReaction(blog._id, 'like');
+                          handleReaction(blog.id, 'like');
                         }}
                         sx={{
-                          color: userReactions[blog._id] === 'like' ? '#1976d2' : '#666',
-                          fontWeight: userReactions[blog._id] === 'like' ? 600 : 400,
+                          color: userReactions[blog.id] === 'like' ? '#1976d2' : '#666',
+                          fontWeight: userReactions[blog.id] === 'like' ? 600 : 400,
                           '&:hover': { color: '#1976d2' }
                         }}
-                        startIcon={userReactions[blog._id] === 'like' ? '👍' : '🤍'}
+                        startIcon={userReactions[blog.id] === 'like' ? 'ð' : 'ð¤'}
                       >
                         {blog.likes || 0} Like
                       </Button>
@@ -588,14 +665,14 @@ const BlogPage = () => {
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleReaction(blog._id, 'love');
+                          handleReaction(blog.id, 'love');
                         }}
                         sx={{
-                          color: userReactions[blog._id] === 'love' ? '#e91e63' : '#666',
-                          fontWeight: userReactions[blog._id] === 'love' ? 600 : 400,
+                          color: userReactions[blog.id] === 'love' ? '#e91e63' : '#666',
+                          fontWeight: userReactions[blog.id] === 'love' ? 600 : 400,
                           '&:hover': { color: '#e91e63' }
                         }}
-                        startIcon={userReactions[blog._id] === 'love' ? '❤️' : '🤍'}
+                        startIcon={userReactions[blog.id] === 'love' ? 'â¤ï¸' : 'ð¤'}
                       >
                         {blog.loves || 0} Love
                       </Button>
@@ -603,19 +680,21 @@ const BlogPage = () => {
                         size="small"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleReaction(blog._id, 'dislike');
+                          handleReaction(blog.id, 'dislike');
                         }}
                         sx={{
-                          color: userReactions[blog._id] === 'dislike' ? '#f44336' : '#666',
-                          fontWeight: userReactions[blog._id] === 'dislike' ? 600 : 400,
+                          color: userReactions[blog.id] === 'dislike' ? '#f44336' : '#666',
+                          fontWeight: userReactions[blog.id] === 'dislike' ? 600 : 400,
                           '&:hover': { color: '#f44336' }
                         }}
-                        startIcon={userReactions[blog._id] === 'dislike' ? '👎' : '🤍'}
+                        startIcon={userReactions[blog.id] === 'dislike' ? 'ð' : 'ð¤'}
                       >
                         {blog.dislikes || 0} Dislike
                       </Button>
                     </Box>
                   </Box>
+
+                  {/* Preview Image/Video Section - Google Style */}
                   <Box
                     sx={{
                       width: '180px',
@@ -654,9 +733,15 @@ const BlogPage = () => {
                             transition: 'transform 0.2s ease',
                             '&:hover': { transform: 'scale(1.05)' }
                           }}
-                          onClick={() => window.open(blog.preview, '_blank')}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                          onClick={() => {
+                            // Show image modal
+                            window.open(blog.preview, '_blank');
+                          }}
                         />
-                      ) : (
+                      ) : blog.previewType === 'video' ? (
                         <Box
                           sx={{
                             position: 'relative',
@@ -678,8 +763,13 @@ const BlogPage = () => {
                               borderRadius: 1
                             }}
                             controls
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
                           />
                         </Box>
+                      ) : (
+                        <ArticleIcon sx={{ fontSize: 60, color: '#ccc' }} />
                       )
                     ) : (
                       <ArticleIcon sx={{ fontSize: 60, color: '#ccc' }} />
@@ -695,20 +785,158 @@ const BlogPage = () => {
       {/* Blog Detail Tab */}
       {tabValue === 1 && selectedBlog && (
         <Box sx={{ mt: 3 }}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
-            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8 }}>
-              {selectedBlog.content}
-            </Typography>
-            {selectedBlog.contentType === 'code' && (
-              <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>Code Preview</Typography>
-                <SyntaxHighlighter language="javascript" style={tomorrowNight}>
-                  {selectedBlog.codeJs || selectedBlog.codeHtml || selectedBlog.codeCss || '// No code'}
-                </SyntaxHighlighter>
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
+              <Box>
+                <Typography variant="h4" sx={{ mb: 1 }}>
+                  {selectedBlog.title}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <PersonIcon sx={{ fontSize: 18 }} /> {selectedBlog.authorName}
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <AccessTimeIcon sx={{ fontSize: 18 }} /> {new Date(selectedBlog.createdAt).toLocaleDateString()}
+                  </Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <VisibilityIcon sx={{ fontSize: 18 }} /> {selectedBlog.views} views
+                  </Typography>
+                </Box>
+              </Box>
+
+              {(selectedBlog.author === user?.id || isAdmin) && (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => handleEditBlog(selectedBlog)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => handleDeleteBlog(selectedBlog.id)}
+                  >
+                    Delete
+                  </Button>
+                </Box>
+              )}
+            </Box>
+
+            {selectedBlog.tags && selectedBlog.tags.length > 0 && (
+              <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {selectedBlog.tags.map(tag => (
+                  <Chip key={tag} label={tag} variant="outlined" />
+                ))}
               </Box>
             )}
-            {/* Comments and other detail content */}
+
+            <Divider sx={{ my: 2 }} />
+
+            {selectedBlog.contentType === 'code' ? (
+              <Box>
+                <Tabs value={codePreview ? 1 : 0} onChange={(e, val) => setCodePreview(val === 1)}>
+                  <Tab label="Code" />
+                  <Tab label="Preview" />
+                </Tabs>
+                
+                {!codePreview ? (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2">HTML:</Typography>
+                    <Paper sx={{ p: 1, mb: 2, bgcolor: '#f5f5f5', maxHeight: 200, overflow: 'auto' }}>
+                      <code>{selectedBlog.codeHtml}</code>
+                    </Paper>
+
+                    <Typography variant="subtitle2">CSS:</Typography>
+                    <Paper sx={{ p: 1, mb: 2, bgcolor: '#f5f5f5', maxHeight: 200, overflow: 'auto' }}>
+                      <code>{selectedBlog.codeCss}</code>
+                    </Paper>
+
+                    <Typography variant="subtitle2">JavaScript:</Typography>
+                    <Paper sx={{ p: 1, bgcolor: '#f5f5f5', maxHeight: 200, overflow: 'auto' }}>
+                      <code>{selectedBlog.codeJs}</code>
+                    </Paper>
+                  </Box>
+                ) : (
+                  renderCodePreview()
+                )}
+              </Box>
+            ) : (
+              <Typography
+                variant="body1"
+                sx={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.8
+                }}
+              >
+                {selectedBlog.content}
+              </Typography>
+            )}
+          </Paper>
+
+          {/* Comments Section */}
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
+              Comments ({selectedBlog.comments?.length || 0})
+            </Typography>
+
+            {user ? (
+              <Box sx={{ mb: 3, pb: 2, borderBottom: '1px solid #eee' }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Add a comment..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  disabled={submittingComment}
+                />
+                <Button
+                  variant="contained"
+                  startIcon={<SendIcon />}
+                  onClick={handleAddComment}
+                  disabled={!commentText.trim() || submittingComment}
+                  sx={{ mt: 1 }}
+                >
+                  Comment
+                </Button>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Please log in to comment
+              </Alert>
+            )}
+
+            {selectedBlog.comments && selectedBlog.comments.length > 0 ? (
+              selectedBlog.comments.map(comment => (
+                <Box key={comment.id} sx={{ mb: 2, pb: 2, borderBottom: '1px solid #eee' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle2">{comment.userName}</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {new Date(comment.createdAt).toLocaleDateString()}
+                      </Typography>
+                    </Box>
+                    {(comment.user === user?.id || isAdmin) && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteComment(comment.id)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                  <Typography variant="body2">{comment.text}</Typography>
+                </Box>
+              ))
+            ) : (
+              <Typography variant="body2" color="textSecondary">
+                No comments yet
+              </Typography>
+            )}
           </Paper>
         </Box>
       )}
@@ -724,14 +952,15 @@ const BlogPage = () => {
           >
             New Blog
           </Button>
-          {myBlogs.length === 0 ? (
+          
+          {blogs.filter(b => b.author === user.id).length === 0 ? (
             <Paper sx={{ p: 3, textAlign: 'center' }}>
               <Typography>You haven't created any blogs yet</Typography>
             </Paper>
           ) : (
             <Grid container spacing={2}>
-              {myBlogs.map(blog => (
-                <Grid item xs={12} key={blog._id}>
+              {blogs.filter(b => b.author === user.id).map(blog => (
+                <Grid item xs={12} key={blog.id}>
                   <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box>
                       <Typography variant="h6">{blog.title}</Typography>
@@ -740,9 +969,9 @@ const BlogPage = () => {
                       </Typography>
                     </Box>
                     <Box>
-                      <Button size="small" onClick={() => fetchBlogDetail(blog._id)}>View</Button>
+                      <Button size="small" onClick={() => fetchBlogDetail(blog.id)}>View</Button>
                       <Button size="small" onClick={() => handleEditBlog(blog)}>Edit</Button>
-                      <Button size="small" color="error" onClick={() => handleDeleteBlog(blog._id)}>Delete</Button>
+                      <Button size="small" color="error" onClick={() => handleDeleteBlog(blog.id)}>Delete</Button>
                     </Box>
                   </Paper>
                 </Grid>
@@ -752,52 +981,51 @@ const BlogPage = () => {
         </Box>
       )}
 
-      {/* Create/Edit Dialog */}
+      {/* Create/Edit Blog Dialog */}
       <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{editingBlog ? 'Edit Blog' : 'Create New Blog'}</DialogTitle>
-        <DialogContent>
+        <DialogTitle>
+          {editingBlog ? 'Edit Blog' : 'Create New Blog'}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
           <TextField
             fullWidth
-            label="Title"
+            label="Blog Title"
             value={blogTitle}
             onChange={(e) => setBlogTitle(e.target.value)}
             margin="normal"
-            required
+            placeholder="Enter blog title"
           />
-          <TextField
-            fullWidth
-            label="Tags (comma separated)"
-            value={blogTags}
-            onChange={(e) => setBlogTags(e.target.value)}
-            margin="normal"
-          />
-          <Box sx={{ my: 2 }}>
-            <Typography variant="subtitle2">Content Type:</Typography>
+
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Content Type:</Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant={contentType === 'richtext' ? 'contained' : 'outlined'}
+                startIcon={<ArticleIcon />}
                 onClick={() => setContentType('richtext')}
               >
                 Rich Text
               </Button>
               <Button
                 variant={contentType === 'code' ? 'contained' : 'outlined'}
+                startIcon={<CodeIcon />}
                 onClick={() => setContentType('code')}
               >
-                Code
+                HTML/CSS/JS
               </Button>
             </Box>
           </Box>
+
           {contentType === 'richtext' ? (
             <TextField
               fullWidth
-              label="Content"
+              label="Blog Content"
               value={blogContent}
               onChange={(e) => setBlogContent(e.target.value)}
               margin="normal"
               multiline
               rows={8}
-              required
+              placeholder="Write your blog content here..."
             />
           ) : (
             <Box>
@@ -809,6 +1037,7 @@ const BlogPage = () => {
                 margin="normal"
                 multiline
                 rows={4}
+                placeholder="<div>Your HTML here</div>"
               />
               <TextField
                 fullWidth
@@ -818,6 +1047,7 @@ const BlogPage = () => {
                 margin="normal"
                 multiline
                 rows={4}
+                placeholder="body { color: #333; }"
               />
               <TextField
                 fullWidth
@@ -827,41 +1057,130 @@ const BlogPage = () => {
                 margin="normal"
                 multiline
                 rows={4}
+                placeholder="console.log('Hello');"
               />
             </Box>
           )}
-          <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle2" sx={{ mb: 1 }}>
-              Preview Image/Video (Optional, max 10MB):
+
+          <TextField
+            fullWidth
+            label="Tags (comma separated)"
+            value={blogTags}
+            onChange={(e) => setBlogTags(e.target.value)}
+            margin="normal"
+            placeholder="e.g., JavaScript, React, Web Development"
+          />
+
+          {/* Preview Image/Video Upload */}
+          <Box sx={{ mt: 3, p: 2.5, backgroundColor: '#f9f9f9', borderRadius: 1.5, border: '2px dashed #e0e0e0' }}>
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600, color: '#333' }}>
+              ð¸ Preview Image or Video (Like Google Search Results)
             </Typography>
-            <input
-              type="file"
-              accept="image/*,video/*"
-              onChange={handlePreviewUpload}
-              style={{ display: 'block', marginBottom: '10px' }}
-            />
+            
+            <Box sx={{ mb: 2 }}>
+              <input
+                type="file"
+                accept="image/*,video/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // Check file size (10MB max)
+                    if (file.size > 10 * 1024 * 1024) {
+                      setError('File size must be less than 10MB');
+                      return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      setPreview(event.target?.result);
+                      setPreviewType(file.type.startsWith('image') ? 'image' : 'video');
+                      setSuccess(`${file.type.startsWith('image') ? 'Image' : 'Video'} loaded successfully!`);
+                      setTimeout(() => setSuccess(''), 2000);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                style={{ display: 'block', marginBottom: '10px', cursor: 'pointer', padding: '8px' }}
+              />
+              <Typography variant="caption" color="textSecondary">
+                ð Supported: JPEG, PNG, GIF, WebP (images) or MP4, WebM (videos) â Max 10MB
+              </Typography>
+            </Box>
+
             {preview && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="caption">Preview:</Typography>
-                {previewType === 'image' ? (
-                  <img src={preview} alt="Preview" style={{ maxWidth: '100%', maxHeight: '300px', marginTop: '8px', borderRadius: '8px' }} />
-                ) : (
-                  <video src={preview} controls style={{ maxWidth: '100%', maxHeight: '300px', marginTop: '8px', borderRadius: '8px' }} />
-                )}
+              <Box sx={{ mt: 2.5, mb: 2 }}>
+                <Box sx={{ mb: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#666' }}>
+                    â Preview (How it will appear in blog list):
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    width: '100%',
+                    height: '200px',
+                    backgroundColor: '#e8e8e8',
+                    borderRadius: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    border: '1px solid #ddd',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {previewType === 'image' ? (
+                    <Box
+                      component="img"
+                      src={preview}
+                      alt="Preview"
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : previewType === 'video' ? (
+                    <Box
+                      component="video"
+                      src={preview}
+                      controls
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' }}
+                    />
+                  ) : null}
+                </Box>
+                <Button
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  onClick={() => {
+                    setPreview('');
+                    setPreviewType('');
+                  }}
+                  sx={{ mt: 1.5 }}
+                >
+                  â Remove Preview
+                </Button>
               </Box>
             )}
           </Box>
+
           {contentType === 'code' && (
-            <Button onClick={() => setCodePreview(!codePreview)} sx={{ mt: 2 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={() => setCodePreview(!codePreview)}
+              sx={{ mt: 2 }}
+            >
               {codePreview ? 'Hide Preview' : 'Show Preview'}
             </Button>
           )}
-          {codePreview && renderCodePreview()}
+
+          {codePreview && contentType === 'code' && renderCodePreview()}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
-          <Button onClick={editingBlog ? handleUpdateBlog : handleCreateBlog} variant="contained" disabled={loading}>
-            {loading ? 'Saving...' : (editingBlog ? 'Update' : 'Create')}
+          <Button
+            variant="contained"
+            onClick={editingBlog ? handleUpdateBlog : handleCreateBlog}
+            disabled={loading}
+          >
+            {editingBlog ? 'Update' : 'Create'} Blog
           </Button>
         </DialogActions>
       </Dialog>
