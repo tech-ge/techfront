@@ -233,7 +233,7 @@ const MainLayout = ({ children }) => {
           py: 3,
           px: 2,
           mt: 'auto',
-          backgroundColor: 'rgba(245, 245, 245, 0.9)',
+          backgroundColor: '#0C5460',
           backdropFilter: 'blur(10px)'
         }}
       >
@@ -241,7 +241,7 @@ const MainLayout = ({ children }) => {
           <Typography variant="body2" color="#17A2B8" align="center">
             © {new Date().getFullYear()} TechG — Kenyan Science Students Collaboration Platform
           </Typography>
-          <Typography variant="body2" color="text.secondary" align="center" sx={{ mt: 1 }}>
+          <Typography variant="body2" color="#17A2B8" align="center" sx={{ mt: 1 }}>
             For Computer Science, Cybersecurity, and Technology students across Kenyan universities
           </Typography>
         </Container>
