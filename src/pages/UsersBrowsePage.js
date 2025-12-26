@@ -39,13 +39,14 @@ const UsersBrowsePage = () => {
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // Load all users
+  // Load all users - FIXED endpoint
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
+        // FIXED: Using /api/auth/users instead of /auth/users
         const response = await api.get('/auth/users');
-        setUsers(response.data.users);
+        setUsers(response.data.users || response.data.data?.users || []);
         setError('');
       } catch (err) {
         console.error('Failed to load users:', err);
@@ -65,9 +66,9 @@ const UsersBrowsePage = () => {
     const searchLower = searchTerm.toLowerCase();
     if (searchType === 'name') {
       return u.name.toLowerCase().includes(searchLower) || 
-             u.username.toLowerCase().includes(searchLower);
+             (u.username && u.username.toLowerCase().includes(searchLower));
     } else if (searchType === 'course') {
-      return u.course.toLowerCase().includes(searchLower);
+      return u.course && u.course.toLowerCase().includes(searchLower);
     }
     return true;
   });
@@ -92,7 +93,8 @@ const UsersBrowsePage = () => {
     }
 
     try {
-      const response = await api.put('/auth/profile', {
+      // FIXED: Using /api/users/profile endpoint
+      const response = await api.put('/users/profile', {
         about: editedAbout
       });
 
@@ -137,7 +139,8 @@ const UsersBrowsePage = () => {
           const base64 = event.target.result;
           
           try {
-            const response = await api.put('/auth/profile', {
+            // FIXED: Using /api/users/profile endpoint
+            const response = await api.put('/users/profile', {
               profilePhoto: base64
             });
 
@@ -211,7 +214,7 @@ const UsersBrowsePage = () => {
       {/* User Cards Grid - Compact */}
       <Grid container spacing={1}>
         {filteredUsers.map((userData) => (
-          <Grid item xs={6} sm={4} md={3} lg={2.4} key={userData.id}>
+          <Grid item xs={6} sm={4} md={3} lg={2.4} key={userData.id || userData._id}>
             <Card 
               sx={{ 
                 cursor: 'pointer', 
@@ -255,7 +258,7 @@ const UsersBrowsePage = () => {
                   {userData.name}
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#666', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  📍 {userData.location}
+                  📍 {userData.location || 'Unknown'}
                 </Typography>
               </CardContent>
             </Card>
@@ -283,7 +286,7 @@ const UsersBrowsePage = () => {
             <DialogTitle sx={{ pb: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">{selectedUser.name}</Typography>
-                <Typography variant="caption" sx={{ color: '#999' }}>@{selectedUser.username}</Typography>
+                <Typography variant="caption" sx={{ color: '#999' }}>@{selectedUser.username || selectedUser.email?.split('@')[0]}</Typography>
               </Box>
             </DialogTitle>
             <DialogContent sx={{ pb: 2 }}>
@@ -316,7 +319,7 @@ const UsersBrowsePage = () => {
                   )}
                 </Box>
 
-                {user?.id === selectedUser.id && (
+                {user && (user.id === selectedUser.id || user._id === selectedUser._id) && (
                   <Box sx={{ mb: 2 }}>
                     <input
                       type="file"
@@ -342,35 +345,41 @@ const UsersBrowsePage = () => {
 
               {/* User Info */}
               <Stack spacing={2} sx={{ mb: 3 }}>
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
-                    Course
-                  </Typography>
-                  <Typography variant="body2">{selectedUser.course}</Typography>
-                </Box>
+                {selectedUser.course && (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
+                      Course
+                    </Typography>
+                    <Typography variant="body2">{selectedUser.course}</Typography>
+                  </Box>
+                )}
 
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
-                    Age
-                  </Typography>
-                  <Typography variant="body2">{selectedUser.age} years old</Typography>
-                </Box>
+                {selectedUser.age && (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
+                      Age
+                    </Typography>
+                    <Typography variant="body2">{selectedUser.age} years old</Typography>
+                  </Box>
+                )}
 
-                <Box>
-                  <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
-                    Location
-                  </Typography>
-                  <Typography variant="body2">{selectedUser.location}</Typography>
-                </Box>
+                {selectedUser.location && (
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
+                      Location
+                    </Typography>
+                    <Typography variant="body2">{selectedUser.location}</Typography>
+                  </Box>
+                )}
               </Stack>
 
               {/* About Section */}
               <Box sx={{ mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                   <Typography variant="body2" sx={{ color: '#666', fontWeight: 'bold' }}>
-                    About (Min 1000 characters)
+                    About
                   </Typography>
-                  {user?.id === selectedUser.id && (
+                  {user && (user.id === selectedUser.id || user._id === selectedUser._id) && (
                     <Button
                       size="small"
                       startIcon={editingAbout ? <CancelIcon /> : <EditIcon />}
@@ -392,7 +401,7 @@ const UsersBrowsePage = () => {
                       minRows={8}
                       value={editedAbout}
                       onChange={(e) => setEditedAbout(e.target.value)}
-                      placeholder="Write about yourself... (minimum 1000 characters recommended)"
+                      placeholder="Write about yourself..."
                       style={{
                         width: '100%',
                         padding: '12px',
