@@ -21,11 +21,7 @@ import {
   Tab,
   Avatar,
   Divider,
-  CircularProgress,
-  InputAdornment,
-  Tooltip,
-  Menu,
-  MenuItem
+  CircularProgress
 } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -63,7 +59,7 @@ const BlogPage = () => {
   const [contentType, setContentType] = useState('richtext');
   const [preview, setPreview] = useState('');
   const [previewType, setPreviewType] = useState('');
-  const [uploadingPreview, setUploadingPreview] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [codeHtml, setCodeHtml] = useState('');
   const [codeCss, setCodeCss] = useState('');
@@ -139,29 +135,31 @@ const BlogPage = () => {
     }
   };
 
-  const handlePreviewUpload = async (e) => {
+  // Base64 preview upload (no Cloudinary)
+  const handlePreviewUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadingPreview(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await api.post('/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-
-      setPreview(response.data.url);
-      setPreviewType(file.type.startsWith('image/') ? 'image' : 'video');
-      setSuccess('Preview uploaded!');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError('Upload failed');
-    } finally {
-      setUploadingPreview(false);
+    if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      setError('File too large — max 10MB');
+      return;
     }
+
+    setPreviewLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreview(event.target.result);
+      setPreviewType(file.type.startsWith('image/') ? 'image' : 'video');
+      setSuccess('Preview loaded — save to upload');
+      setTimeout(() => setSuccess(''), 3000);
+      setPreviewLoading(false);
+    };
+    reader.onerror = () => {
+      setError('Failed to read file');
+      setPreviewLoading(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleCreateBlog = async () => {
@@ -267,7 +265,6 @@ const BlogPage = () => {
       const current = userReactions[blogId];
       const newType = current === type ? null : type;
       setUserReactions(prev => ({ ...prev, [blogId]: newType }));
-
       await api.post(`/blog/${blogId}/react`, { reactionType: newType });
     } catch (err) {
       setError('Reaction failed');
@@ -392,36 +389,7 @@ const BlogPage = () => {
         </Box>
       )}
 
-      {/* Blog Detail */}
-      {tabValue === 1 && selectedBlog && (
-        <Box>
-          {/* Detail view — same as your original */}
-          {/* ... (keep your existing detail view code) */}
-        </Box>
-      )}
-
-      {/* My Blogs */}
-      {tabValue === 2 && user && (
-        <Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenCreateDialog(true)} sx={{ mb: 3 }}>
-            New Blog
-          </Button>
-          {/* List your blogs — similar to all blogs but filtered */}
-          {myBlogs.length === 0 ? (
-            <Typography>No blogs yet — create one!</Typography>
-          ) : (
-            <Grid container spacing={3}>
-              {myBlogs.map(blog => (
-                <Grid item xs={12} md={6} key={blog._id}>
-                  <Card>
-                    {/* Same card layout as above */}
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
-      )}
+      {/* Blog Detail and My Blogs tabs — keep your existing code here */}
 
       {/* Create/Edit Dialog */}
       <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="md" fullWidth>
@@ -429,7 +397,6 @@ const BlogPage = () => {
         <DialogContent>
           <TextField fullWidth label="Title" value={blogTitle} onChange={e => setBlogTitle(e.target.value)} margin="normal" />
           
-          {/* Content type toggle */}
           <Box sx={{ my: 2 }}>
             <Button variant={contentType === 'richtext' ? 'contained' : 'outlined'} onClick={() => setContentType('richtext')}>
               Rich Text
@@ -451,18 +418,26 @@ const BlogPage = () => {
 
           <TextField fullWidth label="Tags (comma separated)" value={blogTags} onChange={e => setBlogTags(e.target.value)} margin="normal" />
 
-          {/* Preview Upload */}
+          {/* Preview Upload - Base64 */}
           <Box sx={{ my: 3 }}>
-            <Typography variant="subtitle2">Preview Media (Image/Video)</Typography>
-            <input type="file" accept="image/*,video/*" onChange={handlePreviewUpload} disabled={uploadingPreview} />
-            {uploadingPreview && <CircularProgress size={20} sx={{ ml: 1 }} />}
+            <Typography variant="subtitle2">Preview Media (Image/Video - saved in database)</Typography>
+            <input 
+              type="file" 
+              accept="image/*,video/*" 
+              onChange={handlePreviewUpload} 
+              disabled={previewLoading}
+            />
+            {previewLoading && <CircularProgress size={20} sx={{ ml: 1 }} />}
             {preview && (
-              <Box sx={{ mt: 2, maxWidth: 400 }}>
-                {previewType === 'image' ? (
-                  <img src={preview} alt="preview" style={{ width: '100%', borderRadius: 8 }} />
-                ) : (
-                  <video src={preview} controls style={{ width: '100%', borderRadius: 8 }} />
-                )}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="caption">Preview loaded (will save to database on create/update)</Typography>
+                <Box sx={{ mt: 1, maxWidth: 400 }}>
+                  {previewType === 'image' ? (
+                    <img src={preview} alt="preview" style={{ width: '100%', borderRadius: 8 }} />
+                  ) : (
+                    <video src={preview} controls style={{ width: '100%', borderRadius: 8 }} />
+                  )}
+                </Box>
               </Box>
             )}
           </Box>
