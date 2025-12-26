@@ -761,13 +761,12 @@ const BlogPage = () => {
         </Box>
       )}
 
-      {/* Blog Detail Tab — your original beautiful detail view */}
+      {/* Blog Detail Tab */}
       {tabValue === 1 && selectedBlog && (
         <Box sx={{ mt: 3 }}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h4" sx={{ mb: 2 }}>{selectedBlog.title}</Typography>
             <Typography variant="body1">{selectedBlog.content}</Typography>
-            {/* Add the rest of your detail view JSX */}
           </Paper>
         </Box>
       )}
@@ -812,7 +811,7 @@ const BlogPage = () => {
         </Box>
       )}
 
-      {/* Create/Edit Dialog — your original beautiful form */}
+      {/* Create/Edit Dialog */}
       <Dialog 
         open={openCreateDialog} 
         onClose={() => setOpenCreateDialog(false)}
