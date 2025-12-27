@@ -46,14 +46,14 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Data
+  // Data states
   const [users, setUsers] = useState([]);
-  const [allChatMessages, setAllChatMessages] = useState([]);
+  const [publicMessages, setPublicMessages] = useState([]);
   const [reportedMessages, setReportedMessages] = useState([]);
   const [directMessages, setDirectMessages] = useState([]);
   const [blogs, setBlogs] = useState([]);
 
-  // Dialogs
+  // Dialog states
   const [selectedUser, setSelectedUser] = useState(null);
   const [openUserDialog, setOpenUserDialog] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -87,71 +87,64 @@ const AdminDashboard = () => {
 
       let loadedUsers = [];
 
-      // Try multiple possible user endpoints
-      const possibleUserEndpoints = [
-        '/admin/users',
-        '/users',
-        '/auth/users',
+      // Try multiple user endpoints - your backend has /api/admin/users
+      const userEndpoints = [
+        '/api/admin/users',
         '/api/users',
-        '/admin/all-users'
+        '/admin/users',
+        '/users'
       ];
 
-      for (const endpoint of possibleUserEndpoints) {
+      for (const endpoint of userEndpoints) {
         try {
           const res = await api.get(endpoint, { signal: controller.signal });
-          console.log(`Users loaded from: ${endpoint}`, res.data);
+          console.log(`Users loaded from ${endpoint}:`, res.data);
 
-          const possibleData = 
-            res.data.users || 
-            res.data.data || 
-            res.data.userList || 
-            res.data || 
-            [];
-
-          if (Array.isArray(possibleData)) {
-            loadedUsers = possibleData;
-            if (loadedUsers.length > 0) break;
+          const data = res.data.users || res.data.data || res.data || [];
+          if (Array.isArray(data) && data.length >= 0) {
+            loadedUsers = data;
+            break;
           }
         } catch (err) {
-          console.log(`Endpoint failed: ${endpoint}`, err.response?.status || err.message);
+          console.log(`Failed ${endpoint}:`, err.message);
         }
       }
 
       setUsers(loadedUsers);
 
-      // Blogs
+      // Load blogs
       let loadedBlogs = [];
       try {
-        const blogsRes = await api.get('/blog?limit=20');
-        loadedBlogs = blogsRes.data.blogs || blogsRes.data.data || blogsRes.data || [];
+        const res = await api.get('/api/blog?limit=20');
+        loadedBlogs = res.data.blogs || res.data.data || [];
       } catch (err) {
-        console.log('Failed to load blogs');
+        console.log('Blogs failed');
       }
       setBlogs(loadedBlogs);
 
-      // Public chat messages
-      let loadedMessages = [];
+      // Load public messages
+      let loadedPublic = [];
       try {
-        const chatRes = await api.get('/chatmessages');
-        loadedMessages = chatRes.data.chatmessages || chatRes.data.messages || chatRes.data.data || chatRes.data || [];
+        const res = await api.get('/chatmessages');
+        loadedPublic = res.data.messages || res.data.chatmessages || res.data.data || [];
       } catch (err) {
-        console.log('Failed to load public messages');
+        console.log('Public messages failed');
       }
-      setAllChatMessages(loadedMessages);
+      setPublicMessages(loadedPublic);
 
-      // Direct messages to admin
+      // Load direct messages to admin
       let loadedDirect = [];
       try {
-        const directRes = await api.get('/chatmessages/direct');
-        loadedDirect = directRes.data.messages || directRes.data.chatmessages || directRes.data.data || [];
+        const res = await api.get('/chatmessages/direct');
+        loadedDirect = res.data.messages || res.data.chatmessages || res.data.data || [];
       } catch (err) {
-        console.log('Failed to load direct messages');
+        console.log('Direct messages failed');
       }
       setDirectMessages(loadedDirect);
 
-      // Reported messages (assuming field: reported: true or reports: array)
-      const reported = loadedMessages.filter(msg => 
-        msg.reported === true || (msg.reports && msg.reports.length > 0)
+      // Reported messages (assume field: reported: true or reports array)
+      const reported = loadedPublic.filter(msg => 
+        msg.reported || (msg.reports && msg.reports.length > 0)
       );
       setReportedMessages(reported);
 
@@ -160,18 +153,13 @@ const AdminDashboard = () => {
         totalUsers: loadedUsers.length,
         activeUsers: loadedUsers.filter(u => u.isActive !== false).length,
         totalBlogs: loadedBlogs.length,
-        totalMessages: loadedMessages.length,
+        totalMessages: loadedPublic.length,
         reportedCount: reported.length,
         directCount: loadedDirect.length
       });
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Request timed out — partial data loaded');
-      } else {
-        setError('Failed to load dashboard. Check backend routes.');
-      }
-      console.error('Dashboard error:', err);
+      setError('Failed to load data. Check connection.');
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -213,11 +201,11 @@ const AdminDashboard = () => {
   const handleSaveUser = async () => {
     try {
       if (selectedUser) {
-        await api.put(`/admin/users/${selectedUser._id}`, userForm);
-        setSuccess('User updated successfully');
+        await api.put(`/api/admin/users/${selectedUser._id}`, userForm);
+        setSuccess('User updated');
       } else {
-        await api.post('/admin/users', userForm);
-        setSuccess('User created successfully');
+        await api.post('/api/admin/users', userForm);
+        setSuccess('User created');
       }
       setOpenUserDialog(false);
       setSelectedUser(null);
@@ -229,9 +217,9 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Permanently delete this user?')) return;
+    if (!window.confirm('Delete user permanently?')) return;
     try {
-      await api.delete(`/admin/users/${userId}`);
+      await api.delete(`/api/admin/users/${userId}`);
       setSuccess('User deleted');
       fetchDashboardData();
     } catch (err) {
@@ -243,7 +231,7 @@ const AdminDashboard = () => {
     const action = userItem.isActive !== false ? 'block' : 'unblock';
     if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
     try {
-      await api.put(`/admin/users/${userItem._id}/status`, { isActive: userItem.isActive === false });
+      await api.put(`/api/admin/users/${userItem._id}/status`, { isActive: userItem.isActive === false });
       setSuccess(`User ${action}ed`);
       fetchDashboardData();
     } catch (err) {
@@ -252,7 +240,7 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteChat = async (chatId) => {
-    if (!window.confirm('Delete this message permanently?')) return;
+    if (!window.confirm('Delete message permanently?')) return;
     try {
       await api.delete(`/chatmessages/${chatId}`);
       setSuccess('Message deleted');
@@ -307,7 +295,7 @@ const AdminDashboard = () => {
         <Grid item xs={12} sm={6} md={2}>
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'success.main', color: 'white' }}>
             <Typography variant="h4">{stats.activeUsers}</Typography>
-            <Typography>Active Users</Typography>
+            <Typography>Active</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -335,7 +323,7 @@ const AdminDashboard = () => {
             <Badge badgeContent={stats.directCount} color="default">
               <Typography variant="h4">{stats.directCount}</Typography>
             </Badge>
-            <Typography>Direct Msgs</Typography>
+            <Typography>Direct</Typography>
           </Paper>
         </Grid>
       </Grid>
@@ -369,10 +357,7 @@ const AdminDashboard = () => {
                 <TableRow>
                   <TableCell colSpan={6} align="center">
                     <Typography color="text.secondary" sx={{ py: 4 }}>
-                      No users found.<br />
-                      <Typography variant="body2">
-                        Check backend routes: /admin/users or /users
-                      </Typography>
+                      No users found
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -385,7 +370,7 @@ const AdminDashboard = () => {
                         {u._id === user?._id && <Chip label="You" size="small" color="primary" />}
                       </Box>
                     </TableCell>
-                    <TableCell>{u.email || 'No email'}</TableCell>
+                    <TableCell>{u.email}</TableCell>
                     <TableCell>
                       <Chip label={u.role || 'user'} color={u.role === 'admin' ? 'primary' : 'default'} size="small" />
                     </TableCell>
@@ -430,7 +415,7 @@ const AdminDashboard = () => {
               <TableBody>
                 {reportedMessages.map((msg) => (
                   <TableRow key={msg._id} sx={{ bgcolor: '#ffebee' }}>
-                    <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
+                    <TableCell>{msg.sender?.name || msg.senderName || 'Unknown'}</TableCell>
                     <TableCell sx={{ maxWidth: 300 }}>
                       <Tooltip title={msg.content}><span>{msg.content.substring(0, 50)}...</span></Tooltip>
                     </TableCell>
@@ -448,7 +433,7 @@ const AdminDashboard = () => {
         </Paper>
       )}
 
-      {/* Direct Messages */}
+      {/* Direct Messages to Admin */}
       {directMessages.length > 0 && (
         <Paper sx={{ p: 3, mb: 4, border: '2px solid #7b1fa2' }}>
           <Typography variant="h5" sx={{ mb: 3, color: '#7b1fa2', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -470,7 +455,9 @@ const AdminDashboard = () => {
                     <TableCell>{msg.sender?.name || msg.senderName || 'User'}</TableCell>
                     <TableCell sx={{ maxWidth: 400 }}>{msg.content}</TableCell>
                     <TableCell>{new Date(msg.createdAt || msg.timestamp).toLocaleString()}</TableCell>
-                    <TableCell><IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton></TableCell>
+                    <TableCell>
+                      <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -480,10 +467,10 @@ const AdminDashboard = () => {
       )}
 
       {/* Recent Public Messages */}
-      <Paper sx={{ p: 3, mb: 4 }}>
+      <Paper sx={{ p: 3 }}>
         <Typography variant="h5" sx={{ mb: 3 }}>Recent Public Messages</Typography>
         <TableContainer>
-          <Table size="small">
+          <Table>
             <TableHead>
               <TableRow>
                 <TableCell>From</TableCell>
@@ -493,9 +480,9 @@ const AdminDashboard = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {allChatMessages.slice(0, 15).map((msg) => (
+              {publicMessages.slice(0, 15).map((msg) => (
                 <TableRow key={msg._id}>
-                  <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
+                  <TableCell>{msg.sender?.name || msg.senderName || 'Unknown'}</TableCell>
                   <TableCell sx={{ maxWidth: 500 }}>{msg.content}</TableCell>
                   <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
                   <TableCell>
@@ -509,37 +496,7 @@ const AdminDashboard = () => {
         </TableContainer>
       </Paper>
 
-      {/* Blogs */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Recent Blogs</Typography>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Title</TableCell>
-                <TableCell>Author</TableCell>
-                <TableCell>Views / Likes</TableCell>
-                <TableCell>Date</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {blogs.slice(0, 10).map((blog) => (
-                <TableRow key={blog._id}>
-                  <TableCell>{blog.title}</TableCell>
-                  <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
-                  <TableCell>
-                    <Badge badgeContent={blog.views || 0} color="primary" sx={{ mr: 2 }} />
-                    <Badge badgeContent={blog.likes || 0} color="secondary" />
-                  </TableCell>
-                  <TableCell>{new Date(blog.createdAt).toLocaleDateString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* User Dialog */}
+      {/* Dialogs */}
       <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
         <DialogContent>
@@ -569,16 +526,15 @@ const AdminDashboard = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Chat View Dialog */}
       <Dialog open={openChatDialog} onClose={() => setOpenChatDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>Message Details</DialogTitle>
         <DialogContent dividers>
           {selectedChat && (
             <Box>
               <Typography><strong>From:</strong> {selectedChat.sender?.name || selectedChat.senderName || 'Unknown'}</Typography>
-              <Typography><strong>Type:</strong> {selectedChat.type === 'direct' ? 'Direct to Admin' : 'Public'}</Typography>
+              <Typography><strong>Type:</strong> {selectedChat.type === 'direct' ? 'Direct Message' : 'Public Chat'}</Typography>
               <Typography><strong>Time:</strong> {new Date(selectedChat.createdAt || selectedChat.timestamp).toLocaleString()}</Typography>
-              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>Reported by users</Alert>}
+              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>This message was reported</Alert>}
               <Box sx={{ mt: 3, p: 3, bgcolor: '#f5f5f5', borderRadius: 2 }}>
                 <Typography variant="body1">{selectedChat.content}</Typography>
               </Box>
@@ -589,7 +545,7 @@ const AdminDashboard = () => {
           <Button onClick={() => setOpenChatDialog(false)}>Close</Button>
           {selectedChat && (
             <Button color="error" onClick={() => { handleDeleteChat(selectedChat._id); setOpenChatDialog(false); }}>
-              Delete
+              Delete Message
             </Button>
           )}
         </DialogActions>
