@@ -53,25 +53,25 @@ const ChatPageNew = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
- 
+
   // WhatsApp-style UI states
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [editContent, setEditContent] = useState('');
- 
+
   // Admin sidebar states
   const [adminSidebarOpen, setAdminSidebarOpen] = useState(false);
   const [adminMinimized, setAdminMinimized] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
   const [unreadAdminMessages, setUnreadAdminMessages] = useState(0);
- 
+
   // Message actions states
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
-  const [reactions, setReactions] = useState({}); 
- 
+  const [reactions, setReactions] = useState({});
+
   // Socket and media states
   const [socket, setSocket] = useState(null);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -79,7 +79,7 @@ const ChatPageNew = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
- 
+
   // Refs
   const messagesEndRef = useRef(null);
   const directContainerRef = useRef(null);
@@ -99,7 +99,7 @@ const ChatPageNew = () => {
     try {
       setLoading(true);
       const response = await api.get('/chatmessages');
-      
+     
       if (response.data.success) {
         const fetchedMessages = response.data.messages || response.data.data || response.data.chatmessages || [];
         setMessages(fetchedMessages);
@@ -110,7 +110,7 @@ const ChatPageNew = () => {
             sender: 'admin',
             senderName: 'Admin Geoffrey',
             senderRole: 'admin',
-            senderProfilePic: '', // leave empty for fallback
+            senderProfilePic: '',
             content: 'Welcome to TechG chat! Feel free to ask questions.',
             timestamp: new Date().toISOString(),
             createdAt: new Date().toISOString(),
@@ -158,6 +158,7 @@ const ChatPageNew = () => {
   // ========== SOCKET.IO SETUP ==========
   useEffect(() => {
     if (!user) return;
+
     const newSocket = io('https://techback-production.up.railway.app', {
       reconnection: true,
       reconnectionDelay: 1000,
@@ -223,6 +224,7 @@ const ChatPageNew = () => {
     });
 
     setSocket(newSocket);
+
     return () => newSocket.disconnect();
   }, [user, adminSidebarOpen, adminMinimized]);
 
@@ -242,6 +244,8 @@ const ChatPageNew = () => {
     if (e) e.preventDefault();
     if ((!newMessage.trim() && !selectedMedia) || !user) return;
 
+    let optimisticMessage = null; // ← Fixed: declared outside try block
+
     try {
       setSending(true);
       let mediaData = null;
@@ -253,12 +257,12 @@ const ChatPageNew = () => {
         sender: user._id || user.id,
         senderName: user.name || user.username,
         senderRole: user.role,
-        senderProfilePic: user.profilePic || user.avatar || '', // send your pic
+        senderProfilePic: user.profilePic || user.avatar || '',
         ...(mediaData && { media: mediaData }),
         ...(replyingTo && { replyingTo: replyingTo.id || replyingTo._id })
       };
 
-      const optimisticMessage = {
+      optimisticMessage = {
         _id: Date.now().toString(),
         sender: user._id || user.id,
         senderName: user.name || user.username,
@@ -281,7 +285,6 @@ const ChatPageNew = () => {
         const realMessage = response.data.data || response.data.message || response.data.chatmessage;
         setMessages(prev => prev.map(msg => msg._id === optimisticMessage._id ? realMessage : msg));
         socket?.emit('send-chatmessage', realMessage);
-
         setNewMessage('');
         setSelectedMedia(null);
         setReplyingTo(null);
@@ -291,7 +294,9 @@ const ChatPageNew = () => {
     } catch (err) {
       console.error('Failed to send message:', err);
       setError(err.response?.data?.message || 'Failed to send message');
-      setMessages(prev => prev.filter(msg => msg._id !== optimisticMessage?._id));
+      if (optimisticMessage) {
+        setMessages(prev => prev.filter(msg => msg._id !== optimisticMessage._id));
+      }
     } finally {
       setSending(false);
     }
@@ -300,7 +305,6 @@ const ChatPageNew = () => {
   const handleSendDirectMessage = async (e) => {
     if (e) e.preventDefault();
     if (!newDirectMessage.trim() || !user) return;
-
     try {
       setSending(true);
       const payload = {
@@ -310,7 +314,6 @@ const ChatPageNew = () => {
         type: 'direct',
         receiver: 'admin'
       };
-
       const response = await api.post('/chatmessages/direct', payload);
       if (response.data.success) {
         const newMsg = response.data.data || response.data.message;
@@ -332,7 +335,6 @@ const ChatPageNew = () => {
     try {
       const messageId = editingMessage.id || editingMessage._id;
       const response = await api.put(`/chatmessages/${messageId}`, { content: editContent });
-
       if (response.data.success) {
         const updatedMsg = response.data.data || response.data.message;
         setMessages(prev => prev.map(m => (m.id === messageId || m._id === messageId) ? updatedMsg : m));
@@ -371,7 +373,6 @@ const ChatPageNew = () => {
         reason: reportReason,
         reportedBy: user._id || user.id
       });
-
       setReportDialogOpen(false);
       setReportReason('');
       setSelectedMessage(null);
@@ -437,11 +438,9 @@ const ChatPageNew = () => {
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
-
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
-
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         try {
@@ -458,7 +457,6 @@ const ChatPageNew = () => {
         }
         stream.getTracks().forEach(track => track.stop());
       };
-
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
@@ -500,7 +498,6 @@ const ChatPageNew = () => {
         </Box>
       );
     }
-
     if (msg.type === 'audio' || msg.type === 'voice' || (msg.media && msg.media.mimeType?.startsWith('audio/'))) {
       const audioUrl = msg.content || msg.media?.url;
       return (
@@ -510,7 +507,6 @@ const ChatPageNew = () => {
         </Box>
       );
     }
-
     return (
       <Typography variant="body2" sx={{ fontSize: '0.95rem', wordBreak: 'break-word' }}>
         {msg.content}
@@ -521,10 +517,8 @@ const ChatPageNew = () => {
   const MessageBubble = ({ message, isOwn }) => {
     const messageReactions = reactions[message.id || message._id] || {};
     const hasReactions = Object.keys(messageReactions).length > 0;
-
     return (
       <Box sx={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', mb: 2, px: 1 }}>
-        {/* Avatar for other users */}
         {!isOwn && (
           <Avatar
             src={message.senderProfilePic || message.senderAvatar}
@@ -542,7 +536,6 @@ const ChatPageNew = () => {
             }
           </Avatar>
         )}
-
         <Box sx={{ maxWidth: '70%', position: 'relative' }}>
           {!isOwn && (
             <Typography variant="caption" sx={{ display: 'block', ml: 1, mb: 0.5, color: '#666', fontSize: '0.75rem' }}>
@@ -550,7 +543,6 @@ const ChatPageNew = () => {
               {message.senderRole === 'admin' && ' • Admin'}
             </Typography>
           )}
-
           <Paper
             elevation={0}
             sx={{
@@ -570,9 +562,7 @@ const ChatPageNew = () => {
                 </Typography>
               </Box>
             )}
-
             {renderMessageContent(message)}
-
             {hasReactions && (
               <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
                 {Object.entries(messageReactions).map(([reaction, users]) => (
@@ -585,14 +575,12 @@ const ChatPageNew = () => {
                 ))}
               </Box>
             )}
-
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
                 <Tooltip title="Like"><IconButton size="small" onClick={() => handleReact(message.id || message._id, 'like')} sx={{ p: 0, fontSize: '14px' }}>👍</IconButton></Tooltip>
                 <Tooltip title="Love"><IconButton size="small" onClick={() => handleReact(message.id || message._id, 'love')} sx={{ p: 0, fontSize: '14px' }}>❤️</IconButton></Tooltip>
                 <Tooltip title="Reply"><IconButton size="small" onClick={() => setReplyingTo(message)} sx={{ p: 0 }}><ReplyIcon fontSize="small" /></IconButton></Tooltip>
               </Box>
-
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Typography variant="caption" sx={{ color: isOwn ? '#128C7E' : '#666', fontSize: '0.7rem' }}>
                   {formatTimestamp(message.timestamp || message.createdAt)}
@@ -606,8 +594,6 @@ const ChatPageNew = () => {
             </Box>
           </Paper>
         </Box>
-
-        {/* Avatar for own messages */}
         {isOwn && (
           <Avatar
             src={user?.profilePic || user?.avatar}
@@ -688,7 +674,6 @@ const ChatPageNew = () => {
               </Typography>
             </Box>
           </Box>
-
           <Tooltip title={adminSidebarOpen ? "Hide Admin Chat" : "Show Admin Chat"}>
             <Badge badgeContent={unreadAdminMessages} color="error">
               <IconButton onClick={() => {
@@ -700,10 +685,8 @@ const ChatPageNew = () => {
             </Badge>
           </Tooltip>
         </Paper>
-
         {error && <Alert severity="error" onClose={() => setError('')} sx={{ m: 1 }}>{error}</Alert>}
         {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ m: 1 }}>{success}</Alert>}
-
         <Box ref={messagesContainerRef} sx={{
           flex: 1,
           overflowY: 'auto',
@@ -730,7 +713,6 @@ const ChatPageNew = () => {
           )}
           <div ref={messagesEndRef} />
         </Box>
-
         {/* Reply Preview */}
         {replyingTo && (
           <Box sx={{ p: 1, backgroundColor: '#f0f0f0', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -741,7 +723,6 @@ const ChatPageNew = () => {
             <IconButton size="small" onClick={() => setReplyingTo(null)}><CloseIcon fontSize="small" /></IconButton>
           </Box>
         )}
-
         {/* Input Area */}
         <Paper elevation={0} sx={{ p: 1.5, borderTop: '1px solid #ddd', backgroundColor: '#F0F0F0', borderRadius: 0 }}>
           {selectedMedia && (
@@ -751,11 +732,9 @@ const ChatPageNew = () => {
               <IconButton size="small" onClick={() => setSelectedMedia(null)} disabled={mediaUploading}><CloseIcon fontSize="small" /></IconButton>
             </Box>
           )}
-
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <input type="file" ref={fileInputRef} onChange={handleMediaSelect} accept="image/*,audio/*,video/*" style={{ display: 'none' }} />
             <Tooltip title="Upload Image"><IconButton size="small" onClick={() => fileInputRef.current?.click()} disabled={mediaUploading || sending}><ImageIcon /></IconButton></Tooltip>
-
             <Tooltip title={isRecording ? `Recording ${recordingTime}s` : 'Record Voice Note'}>
               <IconButton size="small" onClick={isRecording ? stopVoiceRecording : startVoiceRecording} disabled={mediaUploading || sending}
                 sx={{ color: isRecording ? '#d32f2f' : 'inherit', animation: isRecording ? 'pulse 1.5s infinite' : 'none',
@@ -764,7 +743,6 @@ const ChatPageNew = () => {
                 {isRecording ? <StopIcon /> : <RecordVoiceOverIcon />}
               </IconButton>
             </Tooltip>
-
             <TextField
               size="small"
               fullWidth
@@ -777,7 +755,6 @@ const ChatPageNew = () => {
               sx={{ backgroundColor: 'white', borderRadius: '20px', '& .MuiOutlinedInput-root': { borderRadius: '20px', paddingRight: '12px' } }}
               onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
             />
-
             <Button
               variant="contained"
               onClick={handleSendMessage}
@@ -830,7 +807,7 @@ const ChatPageNew = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Admin Sidebar (unchanged) */}
+      {/* Admin Sidebar */}
       <Collapse in={adminSidebarOpen} orientation="horizontal" sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, zIndex: 1000, height: '100%' }}>
         <Paper elevation={3} sx={{ height: '100%', width: adminMinimized ? '60px' : '350px', display: 'flex', flexDirection: 'column', transition: 'width 0.3s', borderRadius: '12px 0 0 12px', overflow: 'hidden' }}>
           <Box sx={{ p: 2, backgroundColor: '#d32f2f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '64px' }}>
