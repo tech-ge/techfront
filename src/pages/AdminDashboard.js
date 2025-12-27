@@ -18,25 +18,18 @@ import {
   IconButton,
   CircularProgress,
   Alert,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  Badge,
+  TextField,
   Tooltip
 } from '@mui/material';
 import TabPanel from '@mui/lab/TabPanel';
 import TabContext from '@mui/lab/TabContext';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import FlagIcon from '@mui/icons-material/Flag';
 import MailIcon from '@mui/icons-material/Mail';
@@ -50,32 +43,15 @@ const AdminDashboard = () => {
   const [success, setSuccess] = useState('');
   const [tabValue, setTabValue] = useState('users');
 
-  // Data states
   const [users, setUsers] = useState([]);
   const [publicMessages, setPublicMessages] = useState([]);
   const [reportedMessages, setReportedMessages] = useState([]);
   const [directMessages, setDirectMessages] = useState([]);
   const [blogs, setBlogs] = useState([]);
 
-  // Dialog states
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [openUserDialog, setOpenUserDialog] = useState(false);
-  const [userForm, setUserForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'user',
-    isActive: true
-  });
-  const [openChatDialog, setOpenChatDialog] = useState(false);
   const [selectedChat, setSelectedChat] = useState(null);
-  const [openMassMessageDialog, setOpenMassMessageDialog] = useState(false);
-  const [massMessage, setMassMessage] = useState('');
-  const [massTag, setMassTag] = useState('');
-  const [massCourse, setMassCourse] = useState('');
-  const [massLocation, setMassLocation] = useState('');
+  const [openChatDialog, setOpenChatDialog] = useState(false);
 
-  // Stats
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeUsers: 0,
@@ -106,7 +82,7 @@ const AdminDashboard = () => {
         try {
           const res = await api.get(endpoint, { signal: controller.signal });
           const data = res.data.users || res.data.data || res.data || [];
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             loadedUsers = data;
             break;
           }
@@ -117,43 +93,38 @@ const AdminDashboard = () => {
 
       setUsers(loadedUsers);
 
-      // Load blogs (fixed fetch - added /api/blog)
       let loadedBlogs = [];
       try {
         const res = await api.get('/api/blog?limit=20');
         loadedBlogs = res.data.blogs || res.data.data || res.data || [];
       } catch (err) {
-        console.log('Blogs failed:', err);
+        console.log('Blogs failed');
       }
       setBlogs(loadedBlogs);
 
-      // Load public messages
       let loadedPublic = [];
       try {
         const res = await api.get('/chatmessages');
         loadedPublic = res.data.messages || res.data.chatmessages || res.data.data || [];
       } catch (err) {
-        console.log('Public messages failed:', err);
+        console.log('Public messages failed');
       }
       setPublicMessages(loadedPublic);
 
-      // Load direct messages
       let loadedDirect = [];
       try {
         const res = await api.get('/chatmessages/direct');
         loadedDirect = res.data.messages || res.data.chatmessages || res.data.data || [];
       } catch (err) {
-        console.log('Direct messages failed:', err);
+        console.log('Direct messages failed');
       }
       setDirectMessages(loadedDirect);
 
-      // Reported messages
       const reported = loadedPublic.filter(msg => 
         msg.reported || (msg.reports && msg.reports.length > 0)
       );
       setReportedMessages(reported);
 
-      // Update stats
       setStats({
         totalUsers: loadedUsers.length,
         activeUsers: loadedUsers.filter(u => u.isActive !== false).length,
@@ -164,7 +135,7 @@ const AdminDashboard = () => {
       });
 
     } catch (err) {
-      setError('Failed to load data. Check connection.');
+      setError('Failed to load dashboard data');
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -180,7 +151,6 @@ const AdminDashboard = () => {
     fetchDashboardData();
   }, [isAdmin]);
 
-  // Auto-clear alerts
   useEffect(() => {
     if (success || error) {
       const timer = setTimeout(() => {
@@ -218,7 +188,7 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Delete user permanently?')) return;
+    if (!window.confirm('Permanently delete this user?')) return;
     try {
       await api.delete(`/api/admin/users/${userId}`);
       setSuccess('User deleted');
@@ -228,54 +198,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleApproveReport = async (reportId, messageId) => {
-    if (!window.confirm('Approve report and delete message?')) return;
-    try {
-      await api.put(`/chatmessages/reports/${reportId}/action`, { action: 'approve' });
-      setSuccess('Report approved and message deleted');
-      fetchDashboardData();
-    } catch (err) {
-      setError('Failed to approve report');
-    }
-  };
-
-  const handleRejectReport = async (reportId) => {
-    if (!window.confirm('Reject report?')) return;
-    try {
-      await api.put(`/chatmessages/reports/${reportId}/action`, { action: 'reject' });
-      setSuccess('Report rejected');
-      fetchDashboardData();
-    } catch (err) {
-      setError('Failed to reject report');
-    }
-  };
-
-  const handleReplyDirect = async (messageId, replyContent) => {
-    try {
-      await api.post(`/chatmessages/direct/reply/${messageId}`, { content: replyContent });
-      setSuccess('Reply sent');
-      fetchDashboardData();
-    } catch (err) {
-      setError('Failed to send reply');
-    }
-  };
-
-  const handleSendMassMessage = async () => {
-    try {
-      await api.post('/api/admin/messages/mass', { message: massMessage, tag: massTag, course: massCourse, location: massLocation });
-      setSuccess('Mass message sent');
-      setOpenMassMessageDialog(false);
-      setMassMessage('');
-      setMassTag('');
-      setMassCourse('');
-      setMassLocation('');
-    } catch (err) {
-      setError('Failed to send mass message');
-    }
-  };
-
   const handleDeleteChat = async (chatId) => {
-    if (!window.confirm('Delete message permanently?')) return;
+    if (!window.confirm('Delete this message permanently?')) return;
     try {
       await api.delete(`/chatmessages/${chatId}`);
       setSuccess('Message deleted');
@@ -317,28 +241,18 @@ const AdminDashboard = () => {
       <Typography variant="h4" gutterBottom>Admin Dashboard</Typography>
 
       <TabContext value={tabValue}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="admin tabs">
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
             <Tab label="Users" value="users" />
-            <Tab label="Reported" value="reported" />
-            <Tab label="Blogs" value="blogs" />
-            <Tab label="Direct Msgs" value="direct" />
-            <Tab label="Stats" value="stats" />
-            <Tab label="Mass Msg" value="mass" />
+            <Tab label={`Reported (${stats.reportedCount})`} value="reported" />
+            <Tab label={`Blogs (${stats.totalBlogs})`} value="blogs" />
+            <Tab label={`Direct (${stats.directCount})`} value="direct" />
           </Tabs>
         </Box>
+
         <TabPanel value="users">
           <Paper sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-              <Typography variant="h5">Users ({stats.totalUsers})</Typography>
-              <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => {
-                setSelectedUser(null);
-                setUserForm({ name: '', email: '', password: '', role: 'user', isActive: true });
-                setOpenUserDialog(true);
-              }}>
-                Add User
-              </Button>
-            </Box>
+            <Typography variant="h5" gutterBottom>Users Management ({stats.totalUsers})</Typography>
             <TableContainer>
               <Table>
                 <TableHead>
@@ -352,91 +266,125 @@ const AdminDashboard = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {users.map((u) => (
-                    <TableRow key={u._id}>
-                      <TableCell>{u.name}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>{u.role}</TableCell>
-                      <TableCell>{u.status}</TableCell>
-                      <TableCell>{new Date(u.createdAt).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <IconButton onClick={() => handleDeactivateUser(u._id)}><BlockIcon /></IconButton>
-                        <IconButton onClick={() => handleActivateUser(u._id)}><CheckCircleIcon /></IconButton>
-                        <IconButton color="error" onClick={() => handleDeleteUser(u._id)}><DeleteIcon /></IconButton>
-                      </TableCell>
+                  {users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center">No users found</TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    users.map((u) => (
+                      <TableRow key={u._id}>
+                        <TableCell>{u.name || 'N/A'}</TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Chip label={u.role || 'user'} color={u.role === 'admin' ? 'primary' : 'default'} size="small" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={u.isActive !== false ? 'Active' : 'Blocked'} color={u.isActive !== false ? 'success' : 'error'} size="small" />
+                        </TableCell>
+                        <TableCell>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</TableCell>
+                        <TableCell>
+                          {u.isActive !== false ? (
+                            <Tooltip title="Deactivate">
+                              <IconButton onClick={() => handleDeactivateUser(u._id)}><BlockIcon /></IconButton>
+                            </Tooltip>
+                          ) : (
+                            <Tooltip title="Activate">
+                              <IconButton onClick={() => handleActivateUser(u._id)}><CheckCircleIcon color="success" /></IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Delete">
+                            <IconButton color="error" onClick={() => handleDeleteUser(u._id)}><DeleteIcon /></IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
         </TabPanel>
+
         <TabPanel value="reported">
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>Reported Messages ({stats.reportedCount})</Typography>
+            <Typography variant="h5" gutterBottom>Reported Messages ({stats.reportedCount})</Typography>
             <TableContainer>
-              <Table>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>From</TableCell>
                     <TableCell>Message</TableCell>
-                    <TableCell>Reason</TableCell>
+                    <TableCell>Reports</TableCell>
                     <TableCell>Time</TableCell>
                     <TableCell>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {reportedMessages.map((msg) => (
-                    <TableRow key={msg._id}>
-                      <TableCell>{msg.sender?.name}</TableCell>
-                      <TableCell>{msg.content}</TableCell>
-                      <TableCell>{msg.reports[0]?.reason}</TableCell>
-                      <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Button onClick={() => handleApproveReport(msg.reports[0]?.id, msg._id)}>Approve & Delete</Button>
-                        <Button onClick={() => handleRejectReport(msg.reports[0]?.id)}>Reject</Button>
-                      </TableCell>
+                  {reportedMessages.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center">No reported messages</TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    reportedMessages.map((msg) => (
+                      <TableRow key={msg._id} sx={{ bgcolor: '#ffebee' }}>
+                        <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
+                        <TableCell sx={{ maxWidth: 300 }}>
+                          <Tooltip title={msg.content}><span>{msg.content.substring(0, 50)}...</span></Tooltip>
+                        </TableCell>
+                        <TableCell>{msg.reports?.length || 1}</TableCell>
+                        <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
+                          <IconButton size="small" color="error" onClick={() => handleDeleteChat(msg._id)}><DeleteIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
         </TabPanel>
+
         <TabPanel value="blogs">
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>Blogs ({stats.totalBlogs})</Typography>
+            <Typography variant="h5" gutterBottom>Recent Blogs ({stats.totalBlogs})</Typography>
             <TableContainer>
               <Table>
                 <TableHead>
                   <TableRow>
                     <TableCell>Title</TableCell>
                     <TableCell>Author</TableCell>
-                    <TableCell>Views</TableCell>
-                    <TableCell>Likes</TableCell>
-                    <TableCell>Created</TableCell>
+                    <TableCell>Views / Likes</TableCell>
+                    <TableCell>Date</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {blogs.map((blog) => (
-                    <TableRow key={blog._id}>
-                      <TableCell>{blog.title}</TableCell>
-                      <TableCell>{blog.author?.name}</TableCell>
-                      <TableCell>{blog.views}</TableCell>
-                      <TableCell>{blog.likes}</TableCell>
-                      <TableCell>{new Date(blog.createdAt).toLocaleDateString()}</TableCell>
+                  {blogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">No blogs found</TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    blogs.slice(0, 10).map((blog) => (
+                      <TableRow key={blog._id}>
+                        <TableCell>{blog.title}</TableCell>
+                        <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
+                        <TableCell>{blog.views || 0} / {blog.likes || 0}</TableCell>
+                        <TableCell>{new Date(blog.createdAt).toLocaleDateString()}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
         </TabPanel>
+
         <TabPanel value="direct">
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>Direct Messages ({stats.directCount})</Typography>
+            <Typography variant="h5" gutterBottom>Direct Messages to Admin ({stats.directCount})</Typography>
             <TableContainer>
-              <Table>
+              <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>From</TableCell>
@@ -446,89 +394,51 @@ const AdminDashboard = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {directMessages.map((msg) => (
-                    <TableRow key={msg._id}>
-                      <TableCell>{msg.sender?.name}</TableCell>
-                      <TableCell>{msg.content}</TableCell>
-                      <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Button onClick={() => handleReplyDirect(msg._id, 'Your reply text')}>Reply</Button>
-                      </TableCell>
+                  {directMessages.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} align="center">No direct messages</TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    directMessages.map((msg) => (
+                      <TableRow key={msg._id}>
+                        <TableCell>{msg.sender?.name || msg.senderName || 'User'}</TableCell>
+                        <TableCell sx={{ maxWidth: 400 }}>{msg.content}</TableCell>
+                        <TableCell>{new Date(msg.createdAt || msg.timestamp).toLocaleString()}</TableCell>
+                        <TableCell>
+                          <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
         </TabPanel>
-        <TabPanel value="stats">
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>Platform Stats</Typography>
-            <Grid container spacing={3}>
-              <Grid item xs={6}>
-                <Typography>Total Users: {stats.totalUsers}</Typography>
-              </Grid>
-              <Grid item xs={6}>
-                <Typography>Active Users: {stats.activeUsers}</Typography>
-              </Grid>
-              <Grid item xs= {6}>
-                <Typography>Total Blogs: {stats.totalBlogs}</Typography>
-              </Grid>
-              <Grid item xs= {6}>
-                <Typography>Total Messages: {stats.totalMessages}</Typography>
-              </Grid>
-            </Grid>
-          </Paper>
-        </TabPanel>
-        <TabPanel value="mass">
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" sx={{ mb: 3 }}>Send Mass Message</Typography>
-            <Button variant="contained" onClick={() => setOpenMassMessageDialog(true)}>Send Mass Message</Button>
-            <Dialog open={openMassMessageDialog} onClose={() => setOpenMassMessageDialog(false)}>
-              <DialogTitle>Send Mass Message</DialogTitle>
-              <DialogContent>
-                <TextField label="Message" value={massMessage} onChange={(e) => setMassMessage(e.target.value)} multiline rows={4} fullWidth />
-                <TextField label="Tag" value={massTag} onChange={(e) => setMassTag(e.target.value)} fullWidth sx={{ mt: 2 }} />
-                <TextField label="Course" value={massCourse} onChange={(e) => setMassCourse(e.target.value)} fullWidth sx={{ mt: 2 }} />
-                <TextField label="Location" value={massLocation} onChange={(e) => setMassLocation(e.target.value)} fullWidth sx={{ mt: 2 }} />
-              </DialogContent>
-              <DialogActions>
-                <Button onClick={() => setOpenMassMessageDialog(false)}>Cancel</Button>
-                <Button onClick={handleSendMassMessage} variant="contained">Send</Button>
-              </DialogActions>
-            </Dialog>
-          </Paper>
-        </TabPanel>
       </TabContext>
 
-      {/* Dialogs */}
-      <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)}>
-        <DialogTitle>Create New User</DialogTitle>
-        <DialogContent>
-          <TextField label="Name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} fullWidth />
-          <TextField label="Email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} fullWidth />
-          <TextField label="Password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} fullWidth />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenUserDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveUser} variant="contained">Save</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={openChatDialog} onClose={() => setOpenChatDialog(false)}>
+      <Dialog open={openChatDialog} onClose={() => setOpenChatDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>Message Details</DialogTitle>
-        <DialogContent>
+        <DialogContent dividers>
           {selectedChat && (
             <Box>
-              <Typography>From: {selectedChat.sender?.name}</Typography>
-              <Typography>Content: {selectedChat.content}</Typography>
-              <Typography>Time: {new Date(selectedChat.createdAt).toLocaleString()}</Typography>
+              <Typography><strong>From:</strong> {selectedChat.sender?.name || selectedChat.senderName || 'Unknown'}</Typography>
+              <Typography><strong>Type:</strong> {selectedChat.type === 'direct' ? 'Direct to Admin' : 'Public'}</Typography>
+              <Typography><strong>Time:</strong> {new Date(selectedChat.createdAt || selectedChat.timestamp).toLocaleString()}</Typography>
+              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>Reported by users</Alert>}
+              <Box sx={{ mt: 3, p: 3, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+                <Typography variant="body1">{selectedChat.content}</Typography>
+              </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenChatDialog(false)}>Close</Button>
-          <Button onClick={() => handleDeleteChat(selectedChat._id)} color="error">Delete</Button>
+          {selectedChat && (
+            <Button color="error" onClick={() => { handleDeleteChat(selectedChat._id); setOpenChatDialog(false); }}>
+              Delete
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>
