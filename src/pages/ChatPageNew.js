@@ -18,7 +18,8 @@ import {
   DialogContent,
   DialogActions,
   Menu,
-  MenuItem
+  MenuItem,
+  Chip
 } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import SendIcon from '@mui/icons-material/Send';
@@ -94,18 +95,18 @@ const ChatPageNew = () => {
     fetchDirectMessages();
   }, []);
 
-  // Fetch messages from YOUR chat endpoint
+  // Fetch messages from chatmessages endpoint
   const fetchMessages = async () => {
     try {
       setLoading(true);
-      console.log('Fetching messages from /chat endpoint...');
+      console.log('Fetching messages from /chatmessages endpoint...');
       
-      // Use your actual chat endpoint
-      const response = await api.get('/chat');
+      // Use correct chatmessages endpoint
+      const response = await api.get('/chatmessages');
       console.log('Messages response:', response.data);
       
       if (response.data.success) {
-        const fetchedMessages = response.data.messages || response.data.data || [];
+        const fetchedMessages = response.data.messages || response.data.data || response.data.chatmessages || [];
         console.log(`Loaded ${fetchedMessages.length} messages`);
         setMessages(fetchedMessages);
       } else {
@@ -114,20 +115,24 @@ const ChatPageNew = () => {
         const sampleMessages = [
           {
             id: '1',
+            _id: '1',
             sender: 'admin',
             senderName: 'Admin Geoffrey',
             senderRole: 'admin',
             content: 'Welcome to TechG chat! Feel free to ask questions.',
             timestamp: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             type: 'text',
             edited: false
           },
           {
             id: '2',
+            _id: '2',
             sender: 'system',
             senderName: 'System',
             content: 'Chat is active. You can send messages, images, and voice notes.',
             timestamp: new Date(Date.now() - 300000).toISOString(),
+            createdAt: new Date(Date.now() - 300000).toISOString(),
             type: 'text',
             edited: false
           }
@@ -135,18 +140,20 @@ const ChatPageNew = () => {
         setMessages(sampleMessages);
       }
     } catch (err) {
-      console.error('Failed to fetch messages:', err);
+      console.error('Failed to fetch messages:', err.response?.data || err);
       setError('Failed to load messages. Please refresh.');
       
       // Even on error, show sample messages so UI works
       const sampleMessages = [
         {
           id: '1',
+          _id: '1',
           sender: 'admin',
           senderName: 'Admin',
           senderRole: 'admin',
           content: 'Welcome to TechG!',
           timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
           type: 'text',
           edited: false
         }
@@ -159,10 +166,10 @@ const ChatPageNew = () => {
 
   const fetchDirectMessages = async () => {
     try {
-      // Try to fetch from your direct messages endpoint
-      const response = await api.get('/messages/direct/list');
-      if (response.data.messages) {
-        setDirectMessages(response.data.messages);
+      // Try to fetch from direct messages endpoint
+      const response = await api.get('/chatmessages/direct');
+      if (response.data.messages || response.data.chatmessages) {
+        setDirectMessages(response.data.messages || response.data.chatmessages);
       }
     } catch (err) {
       console.log('Direct messages endpoint not available, using empty array');
@@ -183,24 +190,26 @@ const ChatPageNew = () => {
     newSocket.on('connect', () => {
       console.log('✅ Connected to socket server');
       newSocket.emit('join-chat', {
-        userId: user.id,
+        userId: user.id || user._id,
         username: user.name,
         role: user.role
       });
     });
 
-    newSocket.on('new-message', (messageData) => {
-      console.log('New message received:', messageData);
-      if (messageData && messageData.id) {
+    newSocket.on('new-chatmessage', (messageData) => {
+      console.log('New chatmessage received:', messageData);
+      if (messageData && (messageData.id || messageData._id)) {
         setMessages(prev => {
-          const exists = prev.some(m => m.id === messageData.id);
+          const exists = prev.some(m => 
+            m.id === messageData.id || m._id === messageData._id
+          );
           return exists ? prev : [...prev, messageData];
         });
       }
     });
 
     newSocket.on('new-direct-message', (messageData) => {
-      if (messageData && messageData.id) {
+      if (messageData && (messageData.id || messageData._id)) {
         setDirectMessages(prev => [...prev, messageData]);
         if (!adminSidebarOpen || adminMinimized) {
           setUnreadAdminMessages(prev => prev + 1);
@@ -208,15 +217,19 @@ const ChatPageNew = () => {
       }
     });
 
-    newSocket.on('message-deleted', (deletedId) => {
-      setMessages(prev => prev.filter(m => m.id !== deletedId));
+    newSocket.on('chatmessage-deleted', (deletedId) => {
+      setMessages(prev => prev.filter(m => 
+        m.id !== deletedId && m._id !== deletedId
+      ));
     });
 
-    newSocket.on('message-edited', (updatedMsg) => {
-      setMessages(prev => prev.map(m => m.id === updatedMsg.id ? updatedMsg : m));
+    newSocket.on('chatmessage-edited', (updatedMsg) => {
+      setMessages(prev => prev.map(m => 
+        (m.id === updatedMsg.id || m._id === updatedMsg._id) ? updatedMsg : m
+      ));
     });
 
-    newSocket.on('message-reaction', (data) => {
+    newSocket.on('chatmessage-reaction', (data) => {
       if (data.messageId) {
         setReactions(prev => ({
           ...prev,
@@ -228,7 +241,7 @@ const ChatPageNew = () => {
       }
     });
 
-    newSocket.on('message-reported', (data) => {
+    newSocket.on('chatmessage-reported', (data) => {
       console.log('Message reported:', data);
       setSuccess('Message reported to admin');
       setTimeout(() => setSuccess(''), 3000);
@@ -258,7 +271,7 @@ const ChatPageNew = () => {
 
   // ========== MESSAGE ACTIONS ==========
 
-  // Send message
+  // Send message to chatmessages endpoint
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!newMessage.trim() && !selectedMedia) || !user) return;
@@ -272,11 +285,15 @@ const ChatPageNew = () => {
         mediaData = selectedMedia;
       }
 
+      // Updated payload to match your backend schema
       const payload = {
         content: newMessage,
         type: 'text',
+        sender: user._id || user.id,
+        senderName: user.name || user.username,
+        senderRole: user.role,
         ...(mediaData && { media: mediaData }),
-        ...(replyingTo && { replyingTo: replyingTo.id })
+        ...(replyingTo && { replyingTo: replyingTo.id || replyingTo._id })
       };
 
       console.log('Sending message payload:', payload);
@@ -284,31 +301,34 @@ const ChatPageNew = () => {
       // Optimistic update
       const optimisticMessage = {
         id: Date.now().toString(),
-        sender: user.id,
+        _id: Date.now().toString(),
+        sender: user._id || user.id,
         senderName: user.name || user.username,
         senderRole: user.role,
         content: newMessage,
         media: mediaData || null,
         timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         edited: false,
-        replyingTo: replyingTo?.id || null,
+        replyingTo: replyingTo?.id || replyingTo?._id || null,
         type: 'text'
       };
       
       setMessages(prev => [...prev, optimisticMessage]);
 
-      // Send to backend
-      const response = await api.post('/chat', payload);
+      // Send to backend using correct endpoint
+      const response = await api.post('/chatmessages', payload);
       console.log('Message sent response:', response.data);
 
       if (response.data.success) {
         // Replace optimistic message with real one
+        const realMessage = response.data.data || response.data.message || response.data.chatmessage;
         setMessages(prev => prev.map(msg => 
-          msg.id === optimisticMessage.id ? response.data.data : msg
+          msg.id === optimisticMessage.id ? realMessage : msg
         ));
         
         // Emit socket event
-        socket?.emit('send-message', response.data.data);
+        socket?.emit('send-chatmessage', realMessage);
         
         setNewMessage('');
         setSelectedMedia(null);
@@ -317,7 +337,7 @@ const ChatPageNew = () => {
         setTimeout(() => setSuccess(''), 2000);
       }
     } catch (err) {
-      console.error('Failed to send message:', err);
+      console.error('Failed to send message:', err.response?.data || err);
       setError(err.response?.data?.message || 'Failed to send message');
       // Remove optimistic message on error
       setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage?.id));
@@ -335,13 +355,16 @@ const ChatPageNew = () => {
       setSending(true);
       const payload = {
         content: newDirectMessage,
-        senderName: user.name
+        sender: user._id || user.id,
+        senderName: user.name || user.username,
+        type: 'direct',
+        receiver: 'admin'
       };
 
-      const response = await api.post('/messages/direct', payload);
+      const response = await api.post('/chatmessages/direct', payload);
       
       if (response.data.success) {
-        const newMsg = response.data.data;
+        const newMsg = response.data.data || response.data.message;
         setDirectMessages(prev => [...prev, newMsg]);
         socket?.emit('send-direct-message', newMsg);
         setNewDirectMessage('');
@@ -349,7 +372,7 @@ const ChatPageNew = () => {
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
-      console.error('Failed to send direct message:', err);
+      console.error('Failed to send direct message:', err.response?.data || err);
       setError(err.response?.data?.message || 'Failed to send message');
     } finally {
       setSending(false);
@@ -361,23 +384,24 @@ const ChatPageNew = () => {
     if (!editingMessage || !editContent.trim()) return;
 
     try {
-      const response = await api.put(`/chat/${editingMessage.id}`, { 
+      const messageId = editingMessage.id || editingMessage._id;
+      const response = await api.put(`/chatmessages/${messageId}`, { 
         content: editContent 
       });
       
       if (response.data.success) {
-        const updatedMsg = response.data.data;
+        const updatedMsg = response.data.data || response.data.message;
         setMessages(prev => prev.map(msg => 
-          msg.id === editingMessage.id ? updatedMsg : msg
+          (msg.id === messageId || msg._id === messageId) ? updatedMsg : msg
         ));
-        socket?.emit('edit-message', updatedMsg);
+        socket?.emit('edit-chatmessage', updatedMsg);
         setEditingMessage(null);
         setEditContent('');
         setSuccess('Message edited');
         setTimeout(() => setSuccess(''), 2000);
       }
     } catch (err) {
-      console.error('Failed to edit message:', err);
+      console.error('Failed to edit message:', err.response?.data || err);
       setError('Failed to edit message');
     }
   };
@@ -387,14 +411,16 @@ const ChatPageNew = () => {
     if (!window.confirm('Are you sure you want to delete this message?')) return;
 
     try {
-      await api.delete(`/chat/${messageId}`);
-      setMessages(prev => prev.filter(m => m.id !== messageId));
-      socket?.emit('delete-message', messageId);
+      await api.delete(`/chatmessages/${messageId}`);
+      setMessages(prev => prev.filter(m => 
+        m.id !== messageId && m._id !== messageId
+      ));
+      socket?.emit('delete-chatmessage', messageId);
       setMenuAnchor(null);
       setSuccess('Message deleted');
       setTimeout(() => setSuccess(''), 2000);
     } catch (err) {
-      console.error('Failed to delete message:', err);
+      console.error('Failed to delete message:', err.response?.data || err);
       setError('Failed to delete message');
     }
   };
@@ -404,14 +430,15 @@ const ChatPageNew = () => {
     if (!selectedMessage || !reportReason.trim()) return;
 
     try {
-      await api.post(`/chat/${selectedMessage.id}/report`, { 
+      const messageId = selectedMessage.id || selectedMessage._id;
+      await api.post(`/chatmessages/${messageId}/report`, { 
         reason: reportReason 
       });
       
-      socket?.emit('report-message', {
-        messageId: selectedMessage.id,
+      socket?.emit('report-chatmessage', {
+        messageId: messageId,
         reason: reportReason,
-        reportedBy: user.id
+        reportedBy: user._id || user.id
       });
       
       setReportDialogOpen(false);
@@ -421,7 +448,7 @@ const ChatPageNew = () => {
       setSuccess('Message reported to admin');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Failed to report message:', err);
+      console.error('Failed to report message:', err.response?.data || err);
       setError('Failed to report message');
     }
   };
@@ -433,15 +460,15 @@ const ChatPageNew = () => {
       ...prev,
       [messageId]: {
         ...prev[messageId],
-        [reaction]: [...(prev[messageId]?.[reaction] || []), user.id]
+        [reaction]: [...(prev[messageId]?.[reaction] || []), user._id || user.id]
       }
     }));
 
     // Emit socket event
-    socket?.emit('message-reaction', {
+    socket?.emit('chatmessage-reaction', {
       messageId,
       reaction,
-      userId: user.id,
+      userId: user._id || user.id,
       userName: user.name
     });
   };
@@ -461,7 +488,7 @@ const ChatPageNew = () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await api.post('/chat/upload', formData, {
+      const response = await api.post('/chatmessages/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
@@ -506,7 +533,7 @@ const ChatPageNew = () => {
           const formData = new FormData();
           formData.append('file', audioBlob, `voice-note-${Date.now()}.webm`);
 
-          const response = await api.post('/chat/upload', formData, {
+          const response = await api.post('/chatmessages/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
 
@@ -708,7 +735,7 @@ const ChatPageNew = () => {
                 <Tooltip title="Like">
                   <IconButton
                     size="small"
-                    onClick={() => handleReact(message.id, 'like')}
+                    onClick={() => handleReact(message.id || message._id, 'like')}
                     sx={{ p: 0, fontSize: '14px', minWidth: '24px' }}
                   >
                     👍
@@ -717,7 +744,7 @@ const ChatPageNew = () => {
                 <Tooltip title="Love">
                   <IconButton
                     size="small"
-                    onClick={() => handleReact(message.id, 'love')}
+                    onClick={() => handleReact(message.id || message._id, 'love')}
                     sx={{ p: 0, fontSize: '14px', minWidth: '24px' }}
                   >
                     ❤️
@@ -742,7 +769,7 @@ const ChatPageNew = () => {
                     fontSize: '0.7rem'
                   }}
                 >
-                  {formatTimestamp(message.timestamp)}
+                  {formatTimestamp(message.timestamp || message.createdAt)}
                 </Typography>
                 
                 {isOwn && (
@@ -791,7 +818,7 @@ const ChatPageNew = () => {
 
   // Admin message bubble
   const AdminMessageBubble = ({ message }) => {
-    const isOwn = message.sender === user?.id;
+    const isOwn = message.sender === (user?._id || user?.id);
     
     return (
       <Box
@@ -827,7 +854,7 @@ const ChatPageNew = () => {
               mt: 0.5
             }}
           >
-            {formatTimestamp(message.timestamp)}
+            {formatTimestamp(message.timestamp || message.createdAt)}
           </Typography>
         </Paper>
       </Box>
@@ -950,9 +977,9 @@ const ChatPageNew = () => {
           ) : (
             messages.map(msg => (
               <MessageBubble 
-                key={msg.id} 
+                key={msg.id || msg._id} 
                 message={msg} 
-                isOwn={msg.sender === user?.id}
+                isOwn={msg.sender === (user?._id || user?.id)}
               />
             ))
           )}
@@ -1109,7 +1136,7 @@ const ChatPageNew = () => {
         open={Boolean(menuAnchor)}
         onClose={() => setMenuAnchor(null)}
       >
-        {selectedMessage && selectedMessage.sender === user?.id && (
+        {selectedMessage && selectedMessage.sender === (user?._id || user?.id) && (
           <MenuItem onClick={() => {
             setEditingMessage(selectedMessage);
             setEditContent(selectedMessage.content || '');
@@ -1119,9 +1146,9 @@ const ChatPageNew = () => {
           </MenuItem>
         )}
         
-        {selectedMessage && selectedMessage.sender === user?.id && (
+        {selectedMessage && selectedMessage.sender === (user?._id || user?.id) && (
           <MenuItem onClick={() => {
-            deleteMessage(selectedMessage.id);
+            deleteMessage(selectedMessage.id || selectedMessage._id);
             setMenuAnchor(null);
           }}>
             <DeleteIcon sx={{ mr: 1, fontSize: 'small' }} /> Delete
@@ -1322,7 +1349,7 @@ const ChatPageNew = () => {
                   </Box>
                 ) : (
                   directMessages.map(msg => (
-                    <AdminMessageBubble key={msg.id} message={msg} />
+                    <AdminMessageBubble key={msg.id || msg._id} message={msg} />
                   ))
                 )}
                 <div ref={messagesEndRef} />
