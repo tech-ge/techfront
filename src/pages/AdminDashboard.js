@@ -46,14 +46,14 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Data states
+  // Data
   const [users, setUsers] = useState([]);
   const [allChatMessages, setAllChatMessages] = useState([]);
   const [reportedMessages, setReportedMessages] = useState([]);
   const [directMessages, setDirectMessages] = useState([]);
   const [blogs, setBlogs] = useState([]);
 
-  // Dialog states
+  // Dialogs
   const [selectedUser, setSelectedUser] = useState(null);
   const [openUserDialog, setOpenUserDialog] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -76,57 +76,86 @@ const AdminDashboard = () => {
     directCount: 0
   });
 
-  // Fetch all data with timeout protection
   const fetchDashboardData = async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
       setLoading(true);
       setError('');
+      setSuccess('');
 
-      const [usersRes, blogsRes, chatRes, directRes] = await Promise.allSettled([
-        api.get('/admin/users', { signal: controller.signal }).catch(() => api.get('/users')),
-        api.get('/blog?limit=20'),
-        api.get('/chatmessages'),
-        api.get('/chatmessages/direct')
-      ]);
-
-      // Users
       let loadedUsers = [];
-      if (usersRes.status === 'fulfilled') {
-        loadedUsers = usersRes.value.data.users || usersRes.value.data.data || usersRes.value.data || [];
+
+      // Try multiple possible user endpoints
+      const possibleUserEndpoints = [
+        '/admin/users',
+        '/users',
+        '/auth/users',
+        '/api/users',
+        '/admin/all-users'
+      ];
+
+      for (const endpoint of possibleUserEndpoints) {
+        try {
+          const res = await api.get(endpoint, { signal: controller.signal });
+          console.log(`Users loaded from: ${endpoint}`, res.data);
+
+          const possibleData = 
+            res.data.users || 
+            res.data.data || 
+            res.data.userList || 
+            res.data || 
+            [];
+
+          if (Array.isArray(possibleData)) {
+            loadedUsers = possibleData;
+            if (loadedUsers.length > 0) break;
+          }
+        } catch (err) {
+          console.log(`Endpoint failed: ${endpoint}`, err.response?.status || err.message);
+        }
       }
+
       setUsers(loadedUsers);
 
       // Blogs
       let loadedBlogs = [];
-      if (blogsRes.status === 'fulfilled') {
-        loadedBlogs = blogsRes.value.data.blogs || blogsRes.value.data.data || [];
+      try {
+        const blogsRes = await api.get('/blog?limit=20');
+        loadedBlogs = blogsRes.data.blogs || blogsRes.data.data || blogsRes.data || [];
+      } catch (err) {
+        console.log('Failed to load blogs');
       }
       setBlogs(loadedBlogs);
 
-      // All chat messages
+      // Public chat messages
       let loadedMessages = [];
-      if (chatRes.status === 'fulfilled') {
-        loadedMessages = chatRes.value.data.chatmessages || chatRes.value.data.messages || chatRes.value.data || [];
+      try {
+        const chatRes = await api.get('/chatmessages');
+        loadedMessages = chatRes.data.chatmessages || chatRes.data.messages || chatRes.data.data || chatRes.data || [];
+      } catch (err) {
+        console.log('Failed to load public messages');
       }
       setAllChatMessages(loadedMessages);
 
       // Direct messages to admin
       let loadedDirect = [];
-      if (directRes.status === 'fulfilled') {
-        loadedDirect = directRes.value.data.messages || directRes.value.data.chatmessages || directRes.value.data || [];
+      try {
+        const directRes = await api.get('/chatmessages/direct');
+        loadedDirect = directRes.data.messages || directRes.data.chatmessages || directRes.data.data || [];
+      } catch (err) {
+        console.log('Failed to load direct messages');
       }
       setDirectMessages(loadedDirect);
 
-      // Extract reported messages (assuming your backend adds a `reports` array or `reported: true`)
+      // Reported messages (assuming field: reported: true or reports: array)
       const reported = loadedMessages.filter(msg => 
-        msg.reported || (msg.reports && msg.reports.length > 0)
+        msg.reported === true || (msg.reports && msg.reports.length > 0)
       );
       setReportedMessages(reported);
 
-      // Calculate stats from fresh data
+      // Update stats
       setStats({
         totalUsers: loadedUsers.length,
         activeUsers: loadedUsers.filter(u => u.isActive !== false).length,
@@ -137,12 +166,12 @@ const AdminDashboard = () => {
       });
 
     } catch (err) {
-      console.error('Dashboard load error:', err);
       if (err.name === 'AbortError') {
-        setError('Request timed out — some data may be missing');
+        setError('Request timed out — partial data loaded');
       } else {
-        setError('Failed to load dashboard data. Check connection.');
+        setError('Failed to load dashboard. Check backend routes.');
       }
+      console.error('Dashboard error:', err);
     } finally {
       clearTimeout(timeoutId);
       setLoading(false);
@@ -151,14 +180,24 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (!isAdmin) {
-      setError('Access denied. Admin privileges required.');
+      setError('Admin access required');
       setLoading(false);
       return;
     }
     fetchDashboardData();
   }, [isAdmin]);
 
-  // User management
+  // Auto-clear alerts
+  useEffect(() => {
+    if (success || error) {
+      const timer = setTimeout(() => {
+        setSuccess('');
+        setError('');
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, error]);
+
   const handleEditUser = (userItem) => {
     setSelectedUser(userItem);
     setUserForm({
@@ -175,10 +214,10 @@ const AdminDashboard = () => {
     try {
       if (selectedUser) {
         await api.put(`/admin/users/${selectedUser._id}`, userForm);
-        setSuccess('User updated!');
+        setSuccess('User updated successfully');
       } else {
         await api.post('/admin/users', userForm);
-        setSuccess('User created!');
+        setSuccess('User created successfully');
       }
       setOpenUserDialog(false);
       setSelectedUser(null);
@@ -190,7 +229,7 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Delete this user permanently?')) return;
+    if (!window.confirm('Permanently delete this user?')) return;
     try {
       await api.delete(`/admin/users/${userId}`);
       setSuccess('User deleted');
@@ -201,17 +240,17 @@ const AdminDashboard = () => {
   };
 
   const handleToggleUserStatus = async (userItem) => {
-    if (!window.confirm(`Are you sure you want to ${userItem.isActive !== false ? 'block' : 'unblock'} this user?`)) return;
+    const action = userItem.isActive !== false ? 'block' : 'unblock';
+    if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
     try {
       await api.put(`/admin/users/${userItem._id}/status`, { isActive: userItem.isActive === false });
-      setSuccess('User status updated');
+      setSuccess(`User ${action}ed`);
       fetchDashboardData();
     } catch (err) {
       setError('Failed to update status');
     }
   };
 
-  // Chat management
   const handleDeleteChat = async (chatId) => {
     if (!window.confirm('Delete this message permanently?')) return;
     try {
@@ -228,17 +267,6 @@ const AdminDashboard = () => {
     setOpenChatDialog(true);
   };
 
-  // Clear messages after 3 seconds
-  useEffect(() => {
-    if (success || error) {
-      const timer = setTimeout(() => {
-        setSuccess('');
-        setError('');
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [success, error]);
-
   if (!isAdmin) {
     return (
       <Container sx={{ py: 8, textAlign: 'center' }}>
@@ -252,7 +280,7 @@ const AdminDashboard = () => {
       <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
         <Box textAlign="center">
           <CircularProgress size={60} />
-          <Typography sx={{ mt: 2 }}>Loading dashboard...</Typography>
+          <Typography sx={{ mt: 2 }}>Loading admin dashboard...</Typography>
         </Box>
       </Container>
     );
@@ -268,30 +296,30 @@ const AdminDashboard = () => {
 
       <Typography variant="h4" gutterBottom>Admin Dashboard</Typography>
 
-      {/* Stats Cards */}
+      {/* Stats */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={2}>
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'primary.main', color: 'white' }}>
             <Typography variant="h4">{stats.totalUsers}</Typography>
-            <Typography variant="body1">Total Users</Typography>
+            <Typography>Total Users</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'success.main', color: 'white' }}>
             <Typography variant="h4">{stats.activeUsers}</Typography>
-            <Typography variant="body1">Active Users</Typography>
+            <Typography>Active Users</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'info.main', color: 'white' }}>
             <Typography variant="h4">{stats.totalBlogs}</Typography>
-            <Typography variant="body1">Blogs</Typography>
+            <Typography>Blogs</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
           <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.main', color: 'white' }}>
             <Typography variant="h4">{stats.totalMessages}</Typography>
-            <Typography variant="body1">Messages</Typography>
+            <Typography>Messages</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -299,7 +327,7 @@ const AdminDashboard = () => {
             <Badge badgeContent={stats.reportedCount} color="default">
               <Typography variant="h4">{stats.reportedCount}</Typography>
             </Badge>
-            <Typography variant="body1">Reported</Typography>
+            <Typography>Reported</Typography>
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={2}>
@@ -307,12 +335,12 @@ const AdminDashboard = () => {
             <Badge badgeContent={stats.directCount} color="default">
               <Typography variant="h4">{stats.directCount}</Typography>
             </Badge>
-            <Typography variant="body1">Direct Msgs</Typography>
+            <Typography>Direct Msgs</Typography>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Users Table */}
+      {/* Users Management */}
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h5">Users Management</Typography>
@@ -338,17 +366,26 @@ const AdminDashboard = () => {
             </TableHead>
             <TableBody>
               {users.length === 0 ? (
-                <TableRow><TableCell colSpan={6} align="center">No users found</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} align="center">
+                    <Typography color="text.secondary" sx={{ py: 4 }}>
+                      No users found.<br />
+                      <Typography variant="body2">
+                        Check backend routes: /admin/users or /users
+                      </Typography>
+                    </Typography>
+                  </TableCell>
+                </TableRow>
               ) : (
                 users.map((u) => (
-                  <TableRow key={u._id}>
+                  <TableRow key={u._id || u.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {u.name || 'No name'}
                         {u._id === user?._id && <Chip label="You" size="small" color="primary" />}
                       </Box>
                     </TableCell>
-                    <TableCell>{u.email}</TableCell>
+                    <TableCell>{u.email || 'No email'}</TableCell>
                     <TableCell>
                       <Chip label={u.role || 'user'} color={u.role === 'admin' ? 'primary' : 'default'} size="small" />
                     </TableCell>
@@ -394,8 +431,8 @@ const AdminDashboard = () => {
                 {reportedMessages.map((msg) => (
                   <TableRow key={msg._id} sx={{ bgcolor: '#ffebee' }}>
                     <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
-                    <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <Tooltip title={msg.content}><span>{msg.content}</span></Tooltip>
+                    <TableCell sx={{ maxWidth: 300 }}>
+                      <Tooltip title={msg.content}><span>{msg.content.substring(0, 50)}...</span></Tooltip>
                     </TableCell>
                     <TableCell>{msg.reports?.length || 1}</TableCell>
                     <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
@@ -433,9 +470,7 @@ const AdminDashboard = () => {
                     <TableCell>{msg.sender?.name || msg.senderName || 'User'}</TableCell>
                     <TableCell sx={{ maxWidth: 400 }}>{msg.content}</TableCell>
                     <TableCell>{new Date(msg.createdAt || msg.timestamp).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
-                    </TableCell>
+                    <TableCell><IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton></TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -474,7 +509,7 @@ const AdminDashboard = () => {
         </TableContainer>
       </Paper>
 
-      {/* Blogs Table */}
+      {/* Blogs */}
       <Paper sx={{ p: 3 }}>
         <Typography variant="h5" sx={{ mb: 3 }}>Recent Blogs</Typography>
         <TableContainer>
@@ -504,14 +539,14 @@ const AdminDashboard = () => {
         </TableContainer>
       </Paper>
 
-      {/* Dialogs remain the same */}
+      {/* User Dialog */}
       <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
         <DialogContent>
           <TextField fullWidth label="Name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} margin="normal" required />
           <TextField fullWidth label="Email" type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} margin="normal" required />
           <TextField fullWidth label="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} margin="normal"
-            helperText={selectedUser ? "Leave blank to keep current" : "Required for new user"} />
+            helperText={selectedUser ? "Leave blank to keep current" : "Required"} />
           <FormControl fullWidth margin="normal">
             <InputLabel>Role</InputLabel>
             <Select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
@@ -530,10 +565,11 @@ const AdminDashboard = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenUserDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveUser} variant="contained">{selectedUser ? 'Update' : 'Create'}</Button>
+          <Button onClick={handleSaveUser} variant="contained">Save</Button>
         </DialogActions>
       </Dialog>
 
+      {/* Chat View Dialog */}
       <Dialog open={openChatDialog} onClose={() => setOpenChatDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>Message Details</DialogTitle>
         <DialogContent dividers>
@@ -542,7 +578,7 @@ const AdminDashboard = () => {
               <Typography><strong>From:</strong> {selectedChat.sender?.name || selectedChat.senderName || 'Unknown'}</Typography>
               <Typography><strong>Type:</strong> {selectedChat.type === 'direct' ? 'Direct to Admin' : 'Public'}</Typography>
               <Typography><strong>Time:</strong> {new Date(selectedChat.createdAt || selectedChat.timestamp).toLocaleString()}</Typography>
-              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>This message was reported by users</Alert>}
+              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>Reported by users</Alert>}
               <Box sx={{ mt: 3, p: 3, bgcolor: '#f5f5f5', borderRadius: 2 }}>
                 <Typography variant="body1">{selectedChat.content}</Typography>
               </Box>
@@ -553,7 +589,7 @@ const AdminDashboard = () => {
           <Button onClick={() => setOpenChatDialog(false)}>Close</Button>
           {selectedChat && (
             <Button color="error" onClick={() => { handleDeleteChat(selectedChat._id); setOpenChatDialog(false); }}>
-              Delete Message
+              Delete
             </Button>
           )}
         </DialogActions>
