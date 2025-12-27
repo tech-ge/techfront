@@ -25,13 +25,16 @@ import {
   MenuItem,
   Select,
   FormControl,
-  InputLabel
+  InputLabel,
+  Badge
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ChatIcon from '@mui/icons-material/Chat';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
@@ -82,22 +85,47 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch all data in parallel
-      const [usersRes, blogsRes, chatRes, statsRes] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/admin/blogs'),
-        api.get('/admin/chatmessages'),
-        api.get('/admin/stats')
-      ]);
+      // Try different API endpoints - adjust based on your backend
+      try {
+        // Fetch users
+        const usersRes = await api.get('/admin/users');
+        setUsers(usersRes.data.users || usersRes.data.data || []);
+      } catch (userErr) {
+        console.log('Users endpoint not available, trying /users');
+        // Fallback to regular users endpoint
+        const usersRes = await api.get('/users');
+        setUsers(usersRes.data.users || usersRes.data.data || []);
+      }
       
-      setUsers(usersRes.data.users || []);
-      setBlogs(blogsRes.data.blogs || []);
-      setChatMessages(chatRes.data.chatmessages || []);
-      setStats(statsRes.data || {});
+      // Fetch blogs
+      try {
+        const blogsRes = await api.get('/blog?limit=10');
+        setBlogs(blogsRes.data.blogs || blogsRes.data.data || []);
+      } catch (blogErr) {
+        console.log('Blogs endpoint error:', blogErr);
+        setBlogs([]);
+      }
+      
+      // Fetch chat messages
+      try {
+        const chatRes = await api.get('/chatmessages');
+        setChatMessages(chatRes.data.chatmessages || chatRes.data.messages || chatRes.data.data || []);
+      } catch (chatErr) {
+        console.log('Chat messages endpoint error:', chatErr);
+        setChatMessages([]);
+      }
+      
+      // Calculate stats
+      setStats({
+        totalUsers: users.length,
+        totalBlogs: blogs.length,
+        totalChatMessages: chatMessages.length,
+        activeUsers: users.filter(u => u.isActive !== false).length
+      });
       
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err);
-      setError('Failed to load dashboard data');
+      setError(err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -107,10 +135,10 @@ const AdminDashboard = () => {
   const handleEditUser = (user) => {
     setSelectedUser(user);
     setUserForm({
-      name: user.name,
-      email: user.email,
+      name: user.name || '',
+      email: user.email || '',
       role: user.role || 'user',
-      isActive: user.isActive,
+      isActive: user.isActive !== false,
       password: ''
     });
     setOpenUserDialog(true);
@@ -153,8 +181,11 @@ const AdminDashboard = () => {
   };
 
   const handleToggleUserStatus = async (user) => {
+    if (!window.confirm(`Are you sure you want to ${user.isActive ? 'block' : 'activate'} this user?`)) return;
+    
     try {
-      await api.put(`/admin/users/${user._id}/toggle-status`);
+      const payload = { isActive: !user.isActive };
+      await api.put(`/admin/users/${user._id}/status`, payload);
       setSuccess(`User ${user.isActive ? 'blocked' : 'activated'}!`);
       fetchDashboardData();
       setTimeout(() => setSuccess(''), 3000);
@@ -168,7 +199,7 @@ const AdminDashboard = () => {
     if (!window.confirm('Delete this chat message?')) return;
     
     try {
-      await api.delete(`/admin/chatmessages/${chatId}`);
+      await api.delete(`/chatmessages/${chatId}`);
       setSuccess('Chat message deleted!');
       fetchDashboardData();
       setTimeout(() => setSuccess(''), 3000);
@@ -246,7 +277,7 @@ const AdminDashboard = () => {
       {/* Users Management */}
       <Paper sx={{ p: 3, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5">Users Management</Typography>
+          <Typography variant="h5">Users Management ({users.length})</Typography>
           <Button
             variant="contained"
             startIcon={<PersonAddIcon />}
@@ -273,37 +304,55 @@ const AdminDashboard = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user._id}>
-                  <TableCell>{user.name}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+              {users.map((userItem) => (
+                <TableRow key={userItem._id || userItem.id}>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {userItem.name}
+                      {userItem._id === user?._id && (
+                        <Chip label="You" size="small" color="primary" />
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{userItem.email}</TableCell>
                   <TableCell>
                     <Chip 
-                      label={user.role || 'user'} 
-                      color={user.role === 'admin' ? 'primary' : 'default'}
+                      label={userItem.role || 'user'} 
+                      color={userItem.role === 'admin' ? 'primary' : 'default'}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Chip 
-                      label={user.isActive ? 'Active' : 'Blocked'} 
-                      color={user.isActive ? 'success' : 'error'}
+                      label={userItem.isActive !== false ? 'Active' : 'Blocked'} 
+                      color={userItem.isActive !== false ? 'success' : 'error'}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
-                    {new Date(user.createdAt).toLocaleDateString()}
+                    {userItem.createdAt ? new Date(userItem.createdAt).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell>
-                    <IconButton size="small" onClick={() => handleEditUser(user)}>
+                    <IconButton size="small" onClick={() => handleEditUser(userItem)} title="Edit">
                       <EditIcon />
                     </IconButton>
-                    <IconButton size="small" onClick={() => handleToggleUserStatus(user)}>
-                      {user.isActive ? <BlockIcon /> : <CheckCircleIcon />}
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleToggleUserStatus(userItem)}
+                      title={userItem.isActive !== false ? 'Block User' : 'Activate User'}
+                    >
+                      {userItem.isActive !== false ? <BlockIcon /> : <CheckCircleIcon />}
                     </IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleDeleteUser(user._id)}>
-                      <DeleteIcon />
-                    </IconButton>
+                    {userItem._id !== user?._id && (
+                      <IconButton 
+                        size="small" 
+                        color="error" 
+                        onClick={() => handleDeleteUser(userItem._id)}
+                        title="Delete User"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -314,7 +363,7 @@ const AdminDashboard = () => {
 
       {/* Chat Messages Management */}
       <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Chat Messages</Typography>
+        <Typography variant="h5" sx={{ mb: 3 }}>Recent Chat Messages ({chatMessages.length})</Typography>
         
         <TableContainer>
           <Table>
@@ -329,9 +378,18 @@ const AdminDashboard = () => {
             </TableHead>
             <TableBody>
               {chatMessages.slice(0, 10).map((chat) => (
-                <TableRow key={chat._id}>
-                  <TableCell>{chat.sender?.name || 'Unknown'}</TableCell>
-                  <TableCell>{chat.receiver?.name || 'Unknown'}</TableCell>
+                <TableRow key={chat._id || chat.id}>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {chat.sender?.name || 'Unknown'}
+                      {chat.sender?.role === 'admin' && (
+                        <Chip label="Admin" size="small" color="error" />
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    {chat.receiver?.name || 'Everyone'}
+                  </TableCell>
                   <TableCell>
                     <Typography 
                       variant="body2" 
@@ -342,17 +400,26 @@ const AdminDashboard = () => {
                         whiteSpace: 'nowrap'
                       }}
                     >
-                      {chat.message}
+                      {chat.content || chat.message}
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    {new Date(chat.createdAt).toLocaleString()}
+                    {chat.createdAt ? new Date(chat.createdAt).toLocaleString() : 'N/A'}
                   </TableCell>
                   <TableCell>
-                    <Button size="small" onClick={() => handleViewChat(chat)}>
-                      View
-                    </Button>
-                    <IconButton size="small" color="error" onClick={() => handleDeleteChat(chat._id)}>
+                    <IconButton 
+                      size="small" 
+                      onClick={() => handleViewChat(chat)}
+                      title="View Message"
+                    >
+                      <VisibilityIcon />
+                    </IconButton>
+                    <IconButton 
+                      size="small" 
+                      color="error" 
+                      onClick={() => handleDeleteChat(chat._id || chat.id)}
+                      title="Delete Message"
+                    >
                       <DeleteIcon />
                     </IconButton>
                   </TableCell>
@@ -365,7 +432,7 @@ const AdminDashboard = () => {
 
       {/* Blogs Management */}
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Recent Blogs</Typography>
+        <Typography variant="h5" sx={{ mb: 3 }}>Recent Blogs ({blogs.length})</Typography>
         
         <TableContainer>
           <Table>
@@ -381,13 +448,29 @@ const AdminDashboard = () => {
             </TableHead>
             <TableBody>
               {blogs.slice(0, 10).map((blog) => (
-                <TableRow key={blog._id}>
-                  <TableCell>{blog.title}</TableCell>
-                  <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
-                  <TableCell>{blog.views || 0}</TableCell>
-                  <TableCell>{blog.likes || 0}</TableCell>
+                <TableRow key={blog._id || blog.id}>
                   <TableCell>
-                    {new Date(blog.createdAt).toLocaleDateString()}
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        maxWidth: '200px', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {blog.title}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
+                  <TableCell>
+                    <Badge badgeContent={blog.views || 0} color="primary" />
+                  </TableCell>
+                  <TableCell>
+                    <Badge badgeContent={blog.likes || 0} color="secondary" />
+                  </TableCell>
+                  <TableCell>
+                    {blog.createdAt ? new Date(blog.createdAt).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell>
                     <Chip 
@@ -474,18 +557,22 @@ const AdminDashboard = () => {
           {selectedChat && (
             <Box>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                <strong>From:</strong> {selectedChat.sender?.name} ({selectedChat.sender?.email})
+                <strong>From:</strong> {selectedChat.sender?.name || 'Unknown'} 
+                ({selectedChat.sender?.email || 'No email'})
+                {selectedChat.sender?.role === 'admin' && (
+                  <Chip label="Admin" size="small" color="error" sx={{ ml: 1 }} />
+                )}
               </Typography>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                <strong>To:</strong> {selectedChat.receiver?.name} ({selectedChat.receiver?.email})
+                <strong>To:</strong> {selectedChat.receiver?.name || 'Everyone'} 
+                ({selectedChat.receiver?.email || 'Public chat'})
               </Typography>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                <strong>Time:</strong> {new Date(selectedChat.createdAt).toLocaleString()}
+                <strong>Time:</strong> {selectedChat.createdAt ? new Date(selectedChat.createdAt).toLocaleString() : 'N/A'}
               </Typography>
-              <Divider sx={{ my: 2 }} />
-              <Paper sx={{ p: 2, bgcolor: '#f5f5f5' }}>
-                <Typography variant="body1">{selectedChat.message}</Typography>
-              </Paper>
+              <Box sx={{ my: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+                <Typography variant="body1">{selectedChat.content || selectedChat.message}</Typography>
+              </Box>
             </Box>
           )}
         </DialogContent>
@@ -495,7 +582,7 @@ const AdminDashboard = () => {
             <Button 
               color="error" 
               onClick={() => {
-                handleDeleteChat(selectedChat._id);
+                handleDeleteChat(selectedChat._id || selectedChat.id);
                 setOpenChatDialog(false);
               }}
             >
