@@ -53,25 +53,25 @@ const ChatPageNew = () => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  
+ 
   // WhatsApp-style UI states
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [editContent, setEditContent] = useState('');
-  
+ 
   // Admin sidebar states
   const [adminSidebarOpen, setAdminSidebarOpen] = useState(false);
   const [adminMinimized, setAdminMinimized] = useState(false);
   const [adminOnline, setAdminOnline] = useState(false);
   const [unreadAdminMessages, setUnreadAdminMessages] = useState(0);
-  
+ 
   // Message actions states
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportReason, setReportReason] = useState('');
-  const [reactions, setReactions] = useState({}); // { messageId: { 'like': [userIds], 'love': [userIds] } }
-  
+  const [reactions, setReactions] = useState({}); 
+ 
   // Socket and media states
   const [socket, setSocket] = useState(null);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -79,7 +79,7 @@ const ChatPageNew = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  
+ 
   // Refs
   const messagesEndRef = useRef(null);
   const directContainerRef = useRef(null);
@@ -95,44 +95,25 @@ const ChatPageNew = () => {
     fetchDirectMessages();
   }, []);
 
-  // Fetch messages from chatmessages endpoint
   const fetchMessages = async () => {
     try {
       setLoading(true);
-      console.log('Fetching messages from /chatmessages endpoint...');
-      
-      // Use correct chatmessages endpoint
       const response = await api.get('/chatmessages');
-      console.log('Messages response:', response.data);
       
       if (response.data.success) {
         const fetchedMessages = response.data.messages || response.data.data || response.data.chatmessages || [];
-        console.log(`Loaded ${fetchedMessages.length} messages`);
         setMessages(fetchedMessages);
       } else {
-        // Fallback: Create sample messages for testing
-        console.log('No messages returned, creating sample messages');
         const sampleMessages = [
           {
-            id: '1',
             _id: '1',
             sender: 'admin',
             senderName: 'Admin Geoffrey',
             senderRole: 'admin',
+            senderProfilePic: '', // leave empty for fallback
             content: 'Welcome to TechG chat! Feel free to ask questions.',
             timestamp: new Date().toISOString(),
             createdAt: new Date().toISOString(),
-            type: 'text',
-            edited: false
-          },
-          {
-            id: '2',
-            _id: '2',
-            sender: 'system',
-            senderName: 'System',
-            content: 'Chat is active. You can send messages, images, and voice notes.',
-            timestamp: new Date(Date.now() - 300000).toISOString(),
-            createdAt: new Date(Date.now() - 300000).toISOString(),
             type: 'text',
             edited: false
           }
@@ -140,17 +121,15 @@ const ChatPageNew = () => {
         setMessages(sampleMessages);
       }
     } catch (err) {
-      console.error('Failed to fetch messages:', err.response?.data || err);
+      console.error('Failed to fetch messages:', err);
       setError('Failed to load messages. Please refresh.');
-      
-      // Even on error, show sample messages so UI works
       const sampleMessages = [
         {
-          id: '1',
           _id: '1',
           sender: 'admin',
           senderName: 'Admin',
           senderRole: 'admin',
+          senderProfilePic: '',
           content: 'Welcome to TechG!',
           timestamp: new Date().toISOString(),
           createdAt: new Date().toISOString(),
@@ -166,13 +145,12 @@ const ChatPageNew = () => {
 
   const fetchDirectMessages = async () => {
     try {
-      // Try to fetch from direct messages endpoint
       const response = await api.get('/chatmessages/direct');
       if (response.data.messages || response.data.chatmessages) {
         setDirectMessages(response.data.messages || response.data.chatmessages);
       }
     } catch (err) {
-      console.log('Direct messages endpoint not available, using empty array');
+      console.log('Direct messages endpoint not available');
       setDirectMessages([]);
     }
   };
@@ -180,7 +158,6 @@ const ChatPageNew = () => {
   // ========== SOCKET.IO SETUP ==========
   useEffect(() => {
     if (!user) return;
-
     const newSocket = io('https://techback-production.up.railway.app', {
       reconnection: true,
       reconnectionDelay: 1000,
@@ -190,19 +167,16 @@ const ChatPageNew = () => {
     newSocket.on('connect', () => {
       console.log('✅ Connected to socket server');
       newSocket.emit('join-chat', {
-        userId: user.id || user._id,
+        userId: user._id || user.id,
         username: user.name,
         role: user.role
       });
     });
 
     newSocket.on('new-chatmessage', (messageData) => {
-      console.log('New chatmessage received:', messageData);
       if (messageData && (messageData.id || messageData._id)) {
         setMessages(prev => {
-          const exists = prev.some(m => 
-            m.id === messageData.id || m._id === messageData._id
-          );
+          const exists = prev.some(m => m.id === messageData.id || m._id === messageData._id);
           return exists ? prev : [...prev, messageData];
         });
       }
@@ -218,13 +192,11 @@ const ChatPageNew = () => {
     });
 
     newSocket.on('chatmessage-deleted', (deletedId) => {
-      setMessages(prev => prev.filter(m => 
-        m.id !== deletedId && m._id !== deletedId
-      ));
+      setMessages(prev => prev.filter(m => m.id !== deletedId && m._id !== deletedId));
     });
 
     newSocket.on('chatmessage-edited', (updatedMsg) => {
-      setMessages(prev => prev.map(m => 
+      setMessages(prev => prev.map(m =>
         (m.id === updatedMsg.id || m._id === updatedMsg._id) ? updatedMsg : m
       ));
     });
@@ -241,8 +213,7 @@ const ChatPageNew = () => {
       }
     });
 
-    newSocket.on('chatmessage-reported', (data) => {
-      console.log('Message reported:', data);
+    newSocket.on('chatmessage-reported', () => {
       setSuccess('Message reported to admin');
       setTimeout(() => setSuccess(''), 3000);
     });
@@ -252,10 +223,7 @@ const ChatPageNew = () => {
     });
 
     setSocket(newSocket);
-
-    return () => {
-      newSocket.disconnect();
-    };
+    return () => newSocket.disconnect();
   }, [user, adminSidebarOpen, adminMinimized]);
 
   // Auto-scroll
@@ -270,66 +238,50 @@ const ChatPageNew = () => {
   }, [directMessages, adminSidebarOpen, adminMinimized]);
 
   // ========== MESSAGE ACTIONS ==========
-
-  // Send message to chatmessages endpoint
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if ((!newMessage.trim() && !selectedMedia) || !user) return;
 
     try {
       setSending(true);
-      
-      // First upload media if exists
       let mediaData = null;
-      if (selectedMedia) {
-        mediaData = selectedMedia;
-      }
+      if (selectedMedia) mediaData = selectedMedia;
 
-      // Updated payload to match your backend schema
       const payload = {
         content: newMessage,
         type: 'text',
         sender: user._id || user.id,
         senderName: user.name || user.username,
         senderRole: user.role,
+        senderProfilePic: user.profilePic || user.avatar || '', // send your pic
         ...(mediaData && { media: mediaData }),
         ...(replyingTo && { replyingTo: replyingTo.id || replyingTo._id })
       };
 
-      console.log('Sending message payload:', payload);
-
-      // Optimistic update
       const optimisticMessage = {
-        id: Date.now().toString(),
         _id: Date.now().toString(),
         sender: user._id || user.id,
         senderName: user.name || user.username,
         senderRole: user.role,
+        senderProfilePic: user.profilePic || user.avatar || '',
         content: newMessage,
         media: mediaData || null,
         timestamp: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         edited: false,
-        replyingTo: replyingTo?.id || replyingTo?._id || null,
+        replyingTo: replyingTo?._id || null,
         type: 'text'
       };
-      
+
       setMessages(prev => [...prev, optimisticMessage]);
 
-      // Send to backend using correct endpoint
       const response = await api.post('/chatmessages', payload);
-      console.log('Message sent response:', response.data);
 
       if (response.data.success) {
-        // Replace optimistic message with real one
         const realMessage = response.data.data || response.data.message || response.data.chatmessage;
-        setMessages(prev => prev.map(msg => 
-          msg.id === optimisticMessage.id ? realMessage : msg
-        ));
-        
-        // Emit socket event
+        setMessages(prev => prev.map(msg => msg._id === optimisticMessage._id ? realMessage : msg));
         socket?.emit('send-chatmessage', realMessage);
-        
+
         setNewMessage('');
         setSelectedMedia(null);
         setReplyingTo(null);
@@ -337,16 +289,14 @@ const ChatPageNew = () => {
         setTimeout(() => setSuccess(''), 2000);
       }
     } catch (err) {
-      console.error('Failed to send message:', err.response?.data || err);
+      console.error('Failed to send message:', err);
       setError(err.response?.data?.message || 'Failed to send message');
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage?.id));
+      setMessages(prev => prev.filter(msg => msg._id !== optimisticMessage?._id));
     } finally {
       setSending(false);
     }
   };
 
-  // Send direct message to admin
   const handleSendDirectMessage = async (e) => {
     if (e) e.preventDefault();
     if (!newDirectMessage.trim() || !user) return;
@@ -362,7 +312,6 @@ const ChatPageNew = () => {
       };
 
       const response = await api.post('/chatmessages/direct', payload);
-      
       if (response.data.success) {
         const newMsg = response.data.data || response.data.message;
         setDirectMessages(prev => [...prev, newMsg]);
@@ -372,28 +321,21 @@ const ChatPageNew = () => {
         setTimeout(() => setSuccess(''), 3000);
       }
     } catch (err) {
-      console.error('Failed to send direct message:', err.response?.data || err);
       setError(err.response?.data?.message || 'Failed to send message');
     } finally {
       setSending(false);
     }
   };
 
-  // Edit message
   const handleEditMessage = async () => {
     if (!editingMessage || !editContent.trim()) return;
-
     try {
       const messageId = editingMessage.id || editingMessage._id;
-      const response = await api.put(`/chatmessages/${messageId}`, { 
-        content: editContent 
-      });
-      
+      const response = await api.put(`/chatmessages/${messageId}`, { content: editContent });
+
       if (response.data.success) {
         const updatedMsg = response.data.data || response.data.message;
-        setMessages(prev => prev.map(msg => 
-          (msg.id === messageId || msg._id === messageId) ? updatedMsg : msg
-        ));
+        setMessages(prev => prev.map(m => (m.id === messageId || m._id === messageId) ? updatedMsg : m));
         socket?.emit('edit-chatmessage', updatedMsg);
         setEditingMessage(null);
         setEditContent('');
@@ -401,46 +343,35 @@ const ChatPageNew = () => {
         setTimeout(() => setSuccess(''), 2000);
       }
     } catch (err) {
-      console.error('Failed to edit message:', err.response?.data || err);
       setError('Failed to edit message');
     }
   };
 
-  // Delete message
   const deleteMessage = async (messageId) => {
     if (!window.confirm('Are you sure you want to delete this message?')) return;
-
     try {
       await api.delete(`/chatmessages/${messageId}`);
-      setMessages(prev => prev.filter(m => 
-        m.id !== messageId && m._id !== messageId
-      ));
+      setMessages(prev => prev.filter(m => m.id !== messageId && m._id !== messageId));
       socket?.emit('delete-chatmessage', messageId);
       setMenuAnchor(null);
       setSuccess('Message deleted');
       setTimeout(() => setSuccess(''), 2000);
     } catch (err) {
-      console.error('Failed to delete message:', err.response?.data || err);
       setError('Failed to delete message');
     }
   };
 
-  // Report message
   const handleReportMessage = async () => {
     if (!selectedMessage || !reportReason.trim()) return;
-
     try {
       const messageId = selectedMessage.id || selectedMessage._id;
-      await api.post(`/chatmessages/${messageId}/report`, { 
-        reason: reportReason 
-      });
-      
+      await api.post(`/chatmessages/${messageId}/report`, { reason: reportReason });
       socket?.emit('report-chatmessage', {
-        messageId: messageId,
+        messageId,
         reason: reportReason,
         reportedBy: user._id || user.id
       });
-      
+
       setReportDialogOpen(false);
       setReportReason('');
       setSelectedMessage(null);
@@ -448,14 +379,11 @@ const ChatPageNew = () => {
       setSuccess('Message reported to admin');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Failed to report message:', err.response?.data || err);
       setError('Failed to report message');
     }
   };
 
-  // React to message
   const handleReact = (messageId, reaction) => {
-    // Optimistic update
     setReactions(prev => ({
       ...prev,
       [messageId]: {
@@ -463,8 +391,6 @@ const ChatPageNew = () => {
         [reaction]: [...(prev[messageId]?.[reaction] || []), user._id || user.id]
       }
     }));
-
-    // Emit socket event
     socket?.emit('chatmessage-reaction', {
       messageId,
       reaction,
@@ -473,31 +399,24 @@ const ChatPageNew = () => {
     });
   };
 
-  // Media handling
   const handleMediaSelect = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     if (file.size > 10 * 1024 * 1024) {
       setError('File size must be less than 10MB');
       return;
     }
-
     try {
       setMediaUploading(true);
       const formData = new FormData();
       formData.append('file', file);
-
       const response = await api.post('/chatmessages/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          setUploadProgress(percentCompleted);
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent);
         }
       });
-
       if (response.data.success) {
         setSelectedMedia(response.data.file);
         setUploadProgress(0);
@@ -512,7 +431,6 @@ const ChatPageNew = () => {
     }
   };
 
-  // Voice recording
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -521,22 +439,15 @@ const ChatPageNew = () => {
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
         try {
           const formData = new FormData();
           formData.append('file', audioBlob, `voice-note-${Date.now()}.webm`);
-
-          const response = await api.post('/chatmessages/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
-
+          const response = await api.post('/chatmessages/upload', formData);
           if (response.data.success) {
             setSelectedMedia(response.data.file);
             setSuccess('Voice note recorded! Ready to send.');
@@ -545,14 +456,12 @@ const ChatPageNew = () => {
         } catch (err) {
           setError('Failed to upload voice note');
         }
-
         stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
-
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -569,8 +478,6 @@ const ChatPageNew = () => {
     }
   };
 
-  // ========== UI COMPONENTS ==========
-
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -581,28 +488,20 @@ const ChatPageNew = () => {
       const imageUrl = msg.content || msg.media?.url;
       return (
         <Box sx={{ mb: 1 }}>
-          <img 
-            src={imageUrl} 
-            alt="shared" 
-            style={{ 
-              maxWidth: '100%', 
-              borderRadius: '8px', 
-              maxHeight: '200px',
-              cursor: 'pointer'
-            }}
+          <img
+            src={imageUrl}
+            alt="shared"
+            style={{ maxWidth: '100%', borderRadius: '8px', maxHeight: '200px', cursor: 'pointer' }}
             onClick={() => window.open(imageUrl, '_blank')}
           />
           {msg.content && msg.type === 'text' && (
-            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.9rem' }}>
-              {msg.content}
-            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, fontSize: '0.9rem' }}>{msg.content}</Typography>
           )}
         </Box>
       );
     }
-    
-    if (msg.type === 'audio' || msg.type === 'voice' || 
-        (msg.media && msg.media.mimeType?.startsWith('audio/'))) {
+
+    if (msg.type === 'audio' || msg.type === 'voice' || (msg.media && msg.media.mimeType?.startsWith('audio/'))) {
       const audioUrl = msg.content || msg.media?.url;
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -611,7 +510,7 @@ const ChatPageNew = () => {
         </Box>
       );
     }
-    
+
     return (
       <Typography variant="body2" sx={{ fontSize: '0.95rem', wordBreak: 'break-word' }}>
         {msg.content}
@@ -619,100 +518,63 @@ const ChatPageNew = () => {
     );
   };
 
-  // WhatsApp Message Bubble Component
   const MessageBubble = ({ message, isOwn }) => {
-    const messageReactions = reactions[message.id] || {};
+    const messageReactions = reactions[message.id || message._id] || {};
     const hasReactions = Object.keys(messageReactions).length > 0;
 
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: isOwn ? 'flex-end' : 'flex-start',
-          mb: 2,
-          px: 1
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', mb: 2, px: 1 }}>
+        {/* Avatar for other users */}
         {!isOwn && (
-          <Avatar 
-            sx={{ 
-              width: 32, 
-              height: 32, 
+          <Avatar
+            src={message.senderProfilePic || message.senderAvatar}
+            alt={message.senderName}
+            sx={{
+              width: 36,
+              height: 36,
               mr: 1,
               alignSelf: 'flex-end',
-              bgcolor: message.senderRole === 'admin' ? '#d32f2f' : '#1976d2'
+              border: message.senderRole === 'admin' ? '2px solid #d32f2f' : '2px solid #1976d2'
             }}
           >
-            {message.senderName?.charAt(0)?.toUpperCase() || 'U'}
+            {(!message.senderProfilePic && !message.senderAvatar) &&
+              (message.senderName?.charAt(0)?.toUpperCase() || 'U')
+            }
           </Avatar>
         )}
-        
-        <Box
-          sx={{
-            maxWidth: '70%',
-            position: 'relative'
-          }}
-        >
+
+        <Box sx={{ maxWidth: '70%', position: 'relative' }}>
           {!isOwn && (
-            <Typography 
-              variant="caption" 
-              sx={{ 
-                display: 'block', 
-                ml: 1, 
-                mb: 0.5,
-                color: '#666',
-                fontSize: '0.75rem'
-              }}
-            >
+            <Typography variant="caption" sx={{ display: 'block', ml: 1, mb: 0.5, color: '#666', fontSize: '0.75rem' }}>
               {message.senderName}
               {message.senderRole === 'admin' && ' • Admin'}
             </Typography>
           )}
-          
+
           <Paper
             elevation={0}
             sx={{
               p: 1.5,
               backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
-              borderRadius: isOwn 
-                ? '18px 4px 18px 18px' 
-                : '4px 18px 18px 18px',
+              borderRadius: isOwn ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
               border: isOwn ? 'none' : '1px solid #E0E0E0',
               position: 'relative',
-              '&:hover': {
-                boxShadow: '0 1px 3px rgba(0,0,0,0.12)'
-              }
+              '&:hover': { boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
             }}
           >
-            {/* Reply indicator */}
             {message.replyingTo && (
-              <Box sx={{
-                p: 1,
-                mb: 1,
-                backgroundColor: 'rgba(0,0,0,0.05)',
-                borderLeft: '3px solid #128C7E',
-                borderRadius: '8px 0 0 8px',
-                fontSize: '0.85rem'
-              }}>
-                <Typography variant="caption" sx={{ fontWeight: 600, color: '#128C7E' }}>
-                  ↻ Reply
-                </Typography>
+              <Box sx={{ p: 1, mb: 1, backgroundColor: 'rgba(0,0,0,0.05)', borderLeft: '3px solid #128C7E', borderRadius: '8px 0 0 8px', fontSize: '0.85rem' }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#128C7E' }}>↻ Reply</Typography>
                 <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
                   {message.replyingTo?.content?.substring(0, 50)}...
                 </Typography>
               </Box>
             )}
-            
+
             {renderMessageContent(message)}
-            
-            {/* Reactions */}
+
             {hasReactions && (
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 0.5, 
-                mt: 0.5,
-                flexWrap: 'wrap'
-              }}>
+              <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, flexWrap: 'wrap' }}>
                 {Object.entries(messageReactions).map(([reaction, users]) => (
                   <Chip
                     key={reaction}
@@ -723,137 +585,63 @@ const ChatPageNew = () => {
                 ))}
               </Box>
             )}
-            
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              mt: 0.5
-            }}>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
               <Box sx={{ display: 'flex', gap: 0.5 }}>
-                {/* Reaction buttons */}
-                <Tooltip title="Like">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleReact(message.id || message._id, 'like')}
-                    sx={{ p: 0, fontSize: '14px', minWidth: '24px' }}
-                  >
-                    👍
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Love">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleReact(message.id || message._id, 'love')}
-                    sx={{ p: 0, fontSize: '14px', minWidth: '24px' }}
-                  >
-                    ❤️
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title="Reply">
-                  <IconButton
-                    size="small"
-                    onClick={() => setReplyingTo(message)}
-                    sx={{ p: 0, fontSize: '14px' }}
-                  >
-                    <ReplyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                <Tooltip title="Like"><IconButton size="small" onClick={() => handleReact(message.id || message._id, 'like')} sx={{ p: 0, fontSize: '14px' }}>👍</IconButton></Tooltip>
+                <Tooltip title="Love"><IconButton size="small" onClick={() => handleReact(message.id || message._id, 'love')} sx={{ p: 0, fontSize: '14px' }}>❤️</IconButton></Tooltip>
+                <Tooltip title="Reply"><IconButton size="small" onClick={() => setReplyingTo(message)} sx={{ p: 0 }}><ReplyIcon fontSize="small" /></IconButton></Tooltip>
               </Box>
-              
+
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <Typography 
-                  variant="caption" 
-                  sx={{ 
-                    color: isOwn ? '#128C7E' : '#666',
-                    fontSize: '0.7rem'
-                  }}
-                >
+                <Typography variant="caption" sx={{ color: isOwn ? '#128C7E' : '#666', fontSize: '0.7rem' }}>
                   {formatTimestamp(message.timestamp || message.createdAt)}
                 </Typography>
-                
-                {isOwn && (
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      color: '#128C7E',
-                      fontSize: '0.7rem'
-                    }}
-                  >
-                    ✓✓
-                  </Typography>
-                )}
-                
-                {message.edited && (
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      color: '#666',
-                      fontSize: '0.7rem',
-                      fontStyle: 'italic'
-                    }}
-                  >
-                    Edited
-                  </Typography>
-                )}
-                
-                {/* More options menu */}
-                <IconButton
-                  size="small"
-                  onClick={(e) => {
-                    setSelectedMessage(message);
-                    setMenuAnchor(e.currentTarget);
-                  }}
-                  sx={{ p: 0 }}
-                >
+                {isOwn && <Typography variant="caption" sx={{ color: '#128C7E', fontSize: '0.7rem' }}>✓✓</Typography>}
+                {message.edited && <Typography variant="caption" sx={{ color: '#666', fontSize: '0.7rem', fontStyle: 'italic' }}>Edited</Typography>}
+                <IconButton size="small" onClick={(e) => { setSelectedMessage(message); setMenuAnchor(e.currentTarget); }} sx={{ p: 0 }}>
                   <MoreVertIcon fontSize="small" />
                 </IconButton>
               </Box>
             </Box>
           </Paper>
         </Box>
+
+        {/* Avatar for own messages */}
+        {isOwn && (
+          <Avatar
+            src={user?.profilePic || user?.avatar}
+            alt={user?.name}
+            sx={{
+              width: 36,
+              height: 36,
+              ml: 1,
+              alignSelf: 'flex-end',
+              border: user?.role === 'admin' ? '2px solid #d32f2f' : '2px solid #1976d2'
+            }}
+          >
+            {(!user?.profilePic && !user?.avatar) &&
+              (user?.name?.charAt(0)?.toUpperCase() || 'M')
+            }
+          </Avatar>
+        )}
       </Box>
     );
   };
 
-  // Admin message bubble
   const AdminMessageBubble = ({ message }) => {
     const isOwn = message.sender === (user?._id || user?.id);
-    
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: isOwn ? 'flex-end' : 'flex-start',
-          mb: 1.5,
-          px: 0.5
-        }}
-      >
-        <Paper
-          elevation={0}
-          sx={{
-            p: 1,
-            backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
-            borderRadius: isOwn 
-              ? '12px 4px 12px 12px' 
-              : '4px 12px 12px 12px',
-            border: isOwn ? 'none' : '1px solid #E0E0E0',
-            maxWidth: '85%'
-          }}
-        >
-          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-            {message.content}
-          </Typography>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              display: 'block', 
-              textAlign: 'right',
-              color: '#666',
-              fontSize: '0.65rem',
-              mt: 0.5
-            }}
-          >
+      <Box sx={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', mb: 1.5, px: 0.5 }}>
+        <Paper elevation={0} sx={{
+          p: 1,
+          backgroundColor: isOwn ? '#DCF8C6' : '#FFFFFF',
+          borderRadius: isOwn ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+          border: isOwn ? 'none' : '1px solid #E0E0E0',
+          maxWidth: '85%'
+        }}>
+          <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>{message.content}</Typography>
+          <Typography variant="caption" sx={{ display: 'block', textAlign: 'right', color: '#666', fontSize: '0.65rem', mt: 0.5 }}>
             {formatTimestamp(message.timestamp || message.createdAt)}
           </Typography>
         </Paper>
@@ -870,8 +658,8 @@ const ChatPageNew = () => {
   }
 
   return (
-    <Box sx={{ 
-      height: 'calc(100vh - 100px)', 
+    <Box sx={{
+      height: 'calc(100vh - 100px)',
       display: 'flex',
       position: 'relative',
       backgroundColor: '#E5DDD5',
@@ -879,17 +667,9 @@ const ChatPageNew = () => {
       backgroundRepeat: 'repeat',
       overflow: 'hidden'
     }}>
-      
       {/* Main Chat Area */}
-      <Box sx={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column',
-        height: '100%',
-        position: 'relative'
-      }}>
-        {/* Chat Header */}
-        <Paper elevation={0} sx={{ 
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+        <Paper elevation={0} sx={{
           backgroundColor: '#075E54',
           color: 'white',
           p: 2,
@@ -900,85 +680,50 @@ const ChatPageNew = () => {
           zIndex: 10
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: '#128C7E', width: 40, height: 40 }}>
-              <PersonIcon />
-            </Avatar>
+            <Avatar sx={{ bgcolor: '#128C7E', width: 40, height: 40 }}><PersonIcon /></Avatar>
             <Box>
-              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
-                TechG Public Chat
-              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem' }}>TechG Public Chat</Typography>
               <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.8rem' }}>
                 {messages.length} messages • {adminOnline ? '🟢 Online' : '🔴 Offline'}
               </Typography>
             </Box>
           </Box>
-          
+
           <Tooltip title={adminSidebarOpen ? "Hide Admin Chat" : "Show Admin Chat"}>
-            <Badge 
-              badgeContent={unreadAdminMessages} 
-              color="error"
-              sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem' } }}
-            >
-              <IconButton 
-                onClick={() => {
-                  setAdminSidebarOpen(!adminSidebarOpen);
-                  if (unreadAdminMessages > 0 && adminSidebarOpen) {
-                    setUnreadAdminMessages(0);
-                  }
-                }}
-                sx={{ color: 'white' }}
-              >
+            <Badge badgeContent={unreadAdminMessages} color="error">
+              <IconButton onClick={() => {
+                setAdminSidebarOpen(!adminSidebarOpen);
+                if (unreadAdminMessages > 0 && adminSidebarOpen) setUnreadAdminMessages(0);
+              }} sx={{ color: 'white' }}>
                 <AdminPanelSettingsIcon />
               </IconButton>
             </Badge>
           </Tooltip>
         </Paper>
 
-        {/* Error/Success Alerts */}
-        {error && (
-          <Alert severity="error" onClose={() => setError('')} sx={{ m: 1 }}>
-            {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" onClose={() => setSuccess('')} sx={{ m: 1 }}>
-            {success}
-          </Alert>
-        )}
+        {error && <Alert severity="error" onClose={() => setError('')} sx={{ m: 1 }}>{error}</Alert>}
+        {success && <Alert severity="success" onClose={() => setSuccess('')} sx={{ m: 1 }}>{success}</Alert>}
 
-        {/* Messages Container */}
-        <Box
-          ref={messagesContainerRef}
-          sx={{
-            flex: 1,
-            overflowY: 'auto',
-            p: 2,
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
-            backgroundRepeat: 'repeat',
-            backgroundSize: 'contain'
-          }}
-        >
+        <Box ref={messagesContainerRef} sx={{
+          flex: 1,
+          overflowY: 'auto',
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+          backgroundRepeat: 'repeat',
+          backgroundSize: 'contain'
+        }}>
           {messages.length === 0 ? (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              height: '100%',
-              flexDirection: 'column',
-              gap: 2
-            }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 2 }}>
               <ChatBubbleOutlineIcon sx={{ fontSize: 60, color: '#128C7E', opacity: 0.5 }} />
-              <Typography color="textSecondary" sx={{ fontSize: '1rem' }}>
-                No messages yet. Start the conversation!
-              </Typography>
+              <Typography color="textSecondary" sx={{ fontSize: '1rem' }}>No messages yet. Start the conversation!</Typography>
             </Box>
           ) : (
             messages.map(msg => (
-              <MessageBubble 
-                key={msg.id || msg._id} 
-                message={msg} 
+              <MessageBubble
+                key={msg.id || msg._id}
+                message={msg}
                 isOwn={msg.sender === (user?._id || user?.id)}
               />
             ))
@@ -988,98 +733,34 @@ const ChatPageNew = () => {
 
         {/* Reply Preview */}
         {replyingTo && (
-          <Box sx={{ 
-            p: 1, 
-            backgroundColor: '#f0f0f0', 
-            borderTop: '1px solid #ddd',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
+          <Box sx={{ p: 1, backgroundColor: '#f0f0f0', borderTop: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" sx={{ fontWeight: 600, color: '#128C7E' }}>
-                Replying to {replyingTo.senderName}
-              </Typography>
-              <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>
-                {replyingTo.content?.substring(0, 60)}...
-              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: '#128C7E' }}>Replying to {replyingTo.senderName}</Typography>
+              <Typography variant="body2" sx={{ fontSize: '0.85rem' }}>{replyingTo.content?.substring(0, 60)}...</Typography>
             </Box>
-            <IconButton size="small" onClick={() => setReplyingTo(null)}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
+            <IconButton size="small" onClick={() => setReplyingTo(null)}><CloseIcon fontSize="small" /></IconButton>
           </Box>
         )}
 
-        {/* Message Input Area */}
-        <Paper elevation={0} sx={{ 
-          p: 1.5, 
-          borderTop: '1px solid #ddd',
-          backgroundColor: '#F0F0F0',
-          borderRadius: 0
-        }}>
+        {/* Input Area */}
+        <Paper elevation={0} sx={{ p: 1.5, borderTop: '1px solid #ddd', backgroundColor: '#F0F0F0', borderRadius: 0 }}>
           {selectedMedia && (
-            <Box sx={{ 
-              mb: 1, 
-              p: 1, 
-              backgroundColor: 'white', 
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1
-            }}>
-              <Typography variant="caption" sx={{ flex: 1 }}>
-                📎 {selectedMedia.originalName}
-              </Typography>
-              {mediaUploading && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={uploadProgress} 
-                  sx={{ flex: 1, height: 4 }} 
-                />
-              )}
-              <IconButton 
-                size="small" 
-                onClick={() => setSelectedMedia(null)} 
-                disabled={mediaUploading}
-              >
-                <CloseIcon fontSize="small" />
-              </IconButton>
+            <Box sx={{ mb: 1, p: 1, backgroundColor: 'white', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" sx={{ flex: 1 }}>📎 {selectedMedia.originalName}</Typography>
+              {mediaUploading && <LinearProgress variant="determinate" value={uploadProgress} sx={{ flex: 1, height: 4 }} />}
+              <IconButton size="small" onClick={() => setSelectedMedia(null)} disabled={mediaUploading}><CloseIcon fontSize="small" /></IconButton>
             </Box>
           )}
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleMediaSelect}
-              accept="image/*,audio/*,video/*"
-              style={{ display: 'none' }}
-            />
-            <Tooltip title="Upload Image">
-              <IconButton
-                size="small"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={mediaUploading || sending}
-              >
-                <ImageIcon />
-              </IconButton>
-            </Tooltip>
-            
+            <input type="file" ref={fileInputRef} onChange={handleMediaSelect} accept="image/*,audio/*,video/*" style={{ display: 'none' }} />
+            <Tooltip title="Upload Image"><IconButton size="small" onClick={() => fileInputRef.current?.click()} disabled={mediaUploading || sending}><ImageIcon /></IconButton></Tooltip>
+
             <Tooltip title={isRecording ? `Recording ${recordingTime}s` : 'Record Voice Note'}>
-              <IconButton
-                size="small"
-                onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                disabled={mediaUploading || sending}
-                sx={{ 
-                  color: isRecording ? '#d32f2f' : 'inherit',
-                  animation: isRecording ? 'pulse 1.5s infinite' : 'none',
-                  '@keyframes pulse': {
-                    '0%': { opacity: 1 },
-                    '50%': { opacity: 0.5 },
-                    '100%': { opacity: 1 }
-                  }
-                }}
-              >
+              <IconButton size="small" onClick={isRecording ? stopVoiceRecording : startVoiceRecording} disabled={mediaUploading || sending}
+                sx={{ color: isRecording ? '#d32f2f' : 'inherit', animation: isRecording ? 'pulse 1.5s infinite' : 'none',
+                  '@keyframes pulse': { '0%': { opacity: 1 }, '50%': { opacity: 0.5 }, '100%': { opacity: 1 } }
+                }}>
                 {isRecording ? <StopIcon /> : <RecordVoiceOverIcon />}
               </IconButton>
             </Tooltip>
@@ -1093,36 +774,15 @@ const ChatPageNew = () => {
               disabled={sending || mediaUploading}
               multiline
               maxRows={3}
-              sx={{
-                backgroundColor: 'white',
-                borderRadius: '20px',
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '20px',
-                  paddingRight: '12px'
-                }
-              }}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
+              sx={{ backgroundColor: 'white', borderRadius: '20px', '& .MuiOutlinedInput-root': { borderRadius: '20px', paddingRight: '12px' } }}
+              onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
             />
 
             <Button
               variant="contained"
               onClick={handleSendMessage}
               disabled={sending || mediaUploading || (!newMessage.trim() && !selectedMedia)}
-              sx={{
-                minWidth: 'auto',
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                backgroundColor: '#128C7E',
-                '&:hover': {
-                  backgroundColor: '#075E54'
-                }
-              }}
+              sx={{ minWidth: 'auto', width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#128C7E', '&:hover': { backgroundColor: '#075E54' } }}
             >
               <SendIcon />
             </Button>
@@ -1130,237 +790,89 @@ const ChatPageNew = () => {
         </Paper>
       </Box>
 
-      {/* Message Actions Menu */}
-      <Menu
-        anchorEl={menuAnchor}
-        open={Boolean(menuAnchor)}
-        onClose={() => setMenuAnchor(null)}
-      >
+      {/* Menus and Dialogs */}
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
         {selectedMessage && selectedMessage.sender === (user?._id || user?.id) && (
-          <MenuItem onClick={() => {
-            setEditingMessage(selectedMessage);
-            setEditContent(selectedMessage.content || '');
-            setMenuAnchor(null);
-          }}>
-            <EditIcon sx={{ mr: 1, fontSize: 'small' }} /> Edit
-          </MenuItem>
+          <>
+            <MenuItem onClick={() => { setEditingMessage(selectedMessage); setEditContent(selectedMessage.content || ''); setMenuAnchor(null); }}>
+              <EditIcon sx={{ mr: 1, fontSize: 'small' }} /> Edit
+            </MenuItem>
+            <MenuItem onClick={() => { deleteMessage(selectedMessage.id || selectedMessage._id); setMenuAnchor(null); }}>
+              <DeleteIcon sx={{ mr: 1, fontSize: 'small' }} /> Delete
+            </MenuItem>
+          </>
         )}
-        
-        {selectedMessage && selectedMessage.sender === (user?._id || user?.id) && (
-          <MenuItem onClick={() => {
-            deleteMessage(selectedMessage.id || selectedMessage._id);
-            setMenuAnchor(null);
-          }}>
-            <DeleteIcon sx={{ mr: 1, fontSize: 'small' }} /> Delete
-          </MenuItem>
-        )}
-        
-        <MenuItem onClick={() => {
-          setReportDialogOpen(true);
-          setMenuAnchor(null);
-        }}>
+        <MenuItem onClick={() => { setReportDialogOpen(true); setMenuAnchor(null); }}>
           <ReportIcon sx={{ mr: 1, fontSize: 'small' }} /> Report
         </MenuItem>
       </Menu>
 
-      {/* Report Dialog */}
       <Dialog open={reportDialogOpen} onClose={() => setReportDialogOpen(false)}>
         <DialogTitle>Report Message</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Report message from {selectedMessage?.senderName}?
-          </Typography>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Reason for reporting"
-            value={reportReason}
-            onChange={(e) => setReportReason(e.target.value)}
-            placeholder="Inappropriate content, spam, harassment, etc."
-          />
+          <Typography variant="body2" sx={{ mb: 2 }}>Report message from {selectedMessage?.senderName}?</Typography>
+          <TextField fullWidth multiline rows={3} label="Reason for reporting" value={reportReason} onChange={(e) => setReportReason(e.target.value)} placeholder="Inappropriate content, spam, etc." />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => {
-            setReportDialogOpen(false);
-            setReportReason('');
-          }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleReportMessage}
-            variant="contained"
-            color="error"
-          >
-            Report
-          </Button>
+          <Button onClick={() => { setReportDialogOpen(false); setReportReason(''); }}>Cancel</Button>
+          <Button onClick={handleReportMessage} variant="contained" color="error">Report</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Edit Dialog */}
       <Dialog open={Boolean(editingMessage)} onClose={() => setEditingMessage(null)}>
         <DialogTitle>Edit Message</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            autoFocus
-            sx={{ mt: 1, minWidth: '300px' }}
-          />
+          <TextField fullWidth multiline rows={3} value={editContent} onChange={(e) => setEditContent(e.target.value)} autoFocus sx={{ mt: 1, minWidth: '300px' }} />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditingMessage(null)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleEditMessage}
-            variant="contained"
-          >
-            Save
-          </Button>
+          <Button onClick={() => setEditingMessage(null)}>Cancel</Button>
+          <Button onClick={handleEditMessage} variant="contained">Save</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Admin Chat Sidebar */}
-      <Collapse 
-        in={adminSidebarOpen} 
-        orientation="horizontal"
-        sx={{ 
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 1000,
-          height: '100%'
-        }}
-      >
-        <Paper elevation={3} sx={{ 
-          height: '100%', 
-          width: adminMinimized ? '60px' : '350px',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'width 0.3s',
-          borderRadius: '12px 0 0 12px',
-          overflow: 'hidden'
-        }}>
-          
-          {/* Admin Header */}
-          <Box sx={{ 
-            p: 2, 
-            backgroundColor: '#d32f2f', 
-            color: 'white',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            minHeight: '64px'
-          }}>
+      {/* Admin Sidebar (unchanged) */}
+      <Collapse in={adminSidebarOpen} orientation="horizontal" sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, zIndex: 1000, height: '100%' }}>
+        <Paper elevation={3} sx={{ height: '100%', width: adminMinimized ? '60px' : '350px', display: 'flex', flexDirection: 'column', transition: 'width 0.3s', borderRadius: '12px 0 0 12px', overflow: 'hidden' }}>
+          <Box sx={{ p: 2, backgroundColor: '#d32f2f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '64px' }}>
             {!adminMinimized ? (
               <>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <AdminPanelSettingsIcon />
                   <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      Admin Support
-                    </Typography>
-                    <Typography variant="caption">
-                      {adminOnline ? '🟢 Online • Ready to help' : '🔴 Offline • Will reply soon'}
-                    </Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Admin Support</Typography>
+                    <Typography variant="caption">{adminOnline ? '🟢 Online • Ready to help' : '🔴 Offline • Will reply soon'}</Typography>
                   </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 0.5 }}>
-                  <Tooltip title="Minimize">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => setAdminMinimized(true)}
-                      sx={{ color: 'white' }}
-                    >
-                      <KeyboardArrowDownIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Close">
-                    <IconButton 
-                      size="small" 
-                      onClick={() => setAdminSidebarOpen(false)}
-                      sx={{ color: 'white' }}
-                    >
-                      <CloseIcon />
-                    </IconButton>
-                  </Tooltip>
+                  <Tooltip title="Minimize"><IconButton size="small" onClick={() => setAdminMinimized(true)} sx={{ color: 'white' }}><KeyboardArrowDownIcon /></IconButton></Tooltip>
+                  <Tooltip title="Close"><IconButton size="small" onClick={() => setAdminSidebarOpen(false)} sx={{ color: 'white' }}><CloseIcon /></IconButton></Tooltip>
                 </Box>
               </>
             ) : (
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                width: '100%'
-              }}>
-                <Badge 
-                  badgeContent={unreadAdminMessages} 
-                  color="error"
-                  sx={{ '& .MuiBadge-badge': { fontSize: '0.7rem' } }}
-                >
-                  <AdminPanelSettingsIcon />
-                </Badge>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                <Badge badgeContent={unreadAdminMessages} color="error"><AdminPanelSettingsIcon /></Badge>
                 <Tooltip title="Expand Admin Chat" placement="right">
-                  <IconButton 
-                    size="small" 
-                    onClick={() => setAdminMinimized(false)}
-                    sx={{ color: 'white', mt: 1 }}
-                  >
-                    <KeyboardArrowUpIcon />
-                  </IconButton>
+                  <IconButton size="small" onClick={() => setAdminMinimized(false)} sx={{ color: 'white', mt: 1 }}><KeyboardArrowUpIcon /></IconButton>
                 </Tooltip>
               </Box>
             )}
           </Box>
 
-          {/* Admin Messages */}
           {!adminMinimized && (
             <>
-              <Box
-                ref={directContainerRef}
-                sx={{
-                  flex: 1,
-                  overflowY: 'auto',
-                  p: 2,
-                  backgroundColor: '#f5f5f5',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
+              <Box ref={directContainerRef} sx={{ flex: 1, overflowY: 'auto', p: 2, backgroundColor: '#f5f5f5', display: 'flex', flexDirection: 'column' }}>
                 {directMessages.length === 0 ? (
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    height: '100%',
-                    flexDirection: 'column',
-                    gap: 1,
-                    textAlign: 'center'
-                  }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 1, textAlign: 'center' }}>
                     <ChatBubbleOutlineIcon sx={{ fontSize: 40, color: '#d32f2f', opacity: 0.5 }} />
-                    <Typography color="textSecondary" sx={{ fontSize: '0.9rem' }}>
-                      No messages yet. Ask for help!
-                    </Typography>
+                    <Typography color="textSecondary" sx={{ fontSize: '0.9rem' }}>No messages yet. Ask for help!</Typography>
                   </Box>
                 ) : (
-                  directMessages.map(msg => (
-                    <AdminMessageBubble key={msg.id || msg._id} message={msg} />
-                  ))
+                  directMessages.map(msg => <AdminMessageBubble key={msg.id || msg._id} message={msg} />)
                 )}
                 <div ref={messagesEndRef} />
               </Box>
 
-              {/* Admin Input */}
-              <Box sx={{ 
-                p: 1.5, 
-                borderTop: '1px solid #ddd',
-                backgroundColor: 'white'
-              }}>
+              <Box sx={{ p: 1.5, borderTop: '1px solid #ddd', backgroundColor: 'white' }}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <TextField
                     size="small"
@@ -1371,30 +883,11 @@ const ChatPageNew = () => {
                     disabled={sending}
                     multiline
                     maxRows={2}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: '20px'
-                      }
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendDirectMessage();
-                      }
-                    }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '20px' } }}
+                    onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendDirectMessage(); } }}
                   />
-                  <Button
-                    variant="contained"
-                    color="error"
-                    onClick={handleSendDirectMessage}
-                    disabled={sending || !newDirectMessage.trim()}
-                    sx={{
-                      minWidth: 'auto',
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%'
-                    }}
-                  >
+                  <Button variant="contained" color="error" onClick={handleSendDirectMessage} disabled={sending || !newDirectMessage.trim()}
+                    sx={{ minWidth: 'auto', width: '40px', height: '40px', borderRadius: '50%' }}>
                     <SendIcon />
                   </Button>
                 </Box>
@@ -1404,38 +897,12 @@ const ChatPageNew = () => {
         </Paper>
       </Collapse>
 
-      {/* Admin Chat Minimized Button */}
       {!adminSidebarOpen && (
         <Tooltip title="Admin Support" placement="left">
-          <Badge 
-            badgeContent={unreadAdminMessages} 
-            color="error"
-            sx={{ 
-              position: 'absolute',
-              right: 16,
-              bottom: 16,
-              zIndex: 100,
-              '& .MuiBadge-badge': { fontSize: '0.7rem' }
-            }}
-          >
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => {
-                setAdminSidebarOpen(true);
-                setAdminMinimized(false);
-                if (unreadAdminMessages > 0) {
-                  setUnreadAdminMessages(0);
-                }
-              }}
-              sx={{
-                minWidth: 'auto',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                boxShadow: 3
-              }}
-            >
+          <Badge badgeContent={unreadAdminMessages} color="error"
+            sx={{ position: 'absolute', right: 16, bottom: 16, zIndex: 100 }}>
+            <Button variant="contained" color="error" onClick={() => { setAdminSidebarOpen(true); setAdminMinimized(false); setUnreadAdminMessages(0); }}
+              sx={{ minWidth: 'auto', width: '56px', height: '56px', borderRadius: '50%', boxShadow: 3 }}>
               <AdminPanelSettingsIcon />
             </Button>
           </Badge>
