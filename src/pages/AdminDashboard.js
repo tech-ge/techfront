@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Container,
-  Grid,
+  Tabs,
+  Tab,
+  Box,
   Paper,
   Typography,
-  Box,
   Table,
   TableBody,
   TableCell,
@@ -12,8 +13,8 @@ import {
   TableHead,
   TableRow,
   Button,
-  Chip,
   IconButton,
+  Chip,
   CircularProgress,
   Alert,
   TextField,
@@ -21,49 +22,52 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
+  Tooltip,
   Badge,
-  Tooltip
+  Grid
 } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
+import TabPanel from '@mui/lab/TabPanel';
+import TabContext from '@mui/lab/TabContext';
 import BlockIcon from '@mui/icons-material/Block';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import FlagIcon from '@mui/icons-material/Flag';
 import MailIcon from '@mui/icons-material/Mail';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import SendIcon from '@mui/icons-material/Send';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 
 const AdminDashboard = () => {
   const { user, isAdmin } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [tabValue, setTabValue] = useState('users');
 
   // Data
   const [users, setUsers] = useState([]);
-  const [allChatMessages, setAllChatMessages] = useState([]);
+  const [publicMessages, setPublicMessages] = useState([]);
   const [reportedMessages, setReportedMessages] = useState([]);
   const [directMessages, setDirectMessages] = useState([]);
   const [blogs, setBlogs] = useState([]);
 
   // Dialogs
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [openUserDialog, setOpenUserDialog] = useState(false);
-  const [userForm, setUserForm] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'user',
-    isActive: true
-  });
-  const [openChatDialog, setOpenChatDialog] = useState(false);
-  const [selectedChat, setSelectedChat] = useState(null);
+  const [selectedMessage, setSelectedMessage] = useState(null);
+  const [openMessageDialog, setOpenMessageDialog] = useState(false);
+
+  // Mass Message
+  const [openMassDialog, setOpenMassDialog] = useState(false);
+  const [massContent, setMassContent] = useState('');
+  const [massFilter, setMassFilter] = useState('all'); // all, course, location
+  const [massValue, setMassValue] = useState('');
+
+  // Notification
+  const [openNotifDialog, setOpenNotifDialog] = useState(false);
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifBody, setNotifBody] = useState('');
 
   // Stats
   const [stats, setStats] = useState({
@@ -75,83 +79,60 @@ const AdminDashboard = () => {
     directCount: 0
   });
 
-  const fetchDashboardData = async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
+  const fetchData = async () => {
     try {
       setLoading(true);
       setError('');
-      setSuccess('');
 
+      // Fetch users
       let loadedUsers = [];
-
-      // Try multiple possible user endpoints
-      const possibleUserEndpoints = [
-        '/api/admin/users',
-        '/users',
-        '/auth/users',
-        '/api/users',
-        '/admin/all-users'
-      ];
-
-      for (const endpoint of possibleUserEndpoints) {
+      const userEndpoints = ['/api/admin/users', '/api/users', '/users'];
+      for (const endpoint of userEndpoints) {
         try {
-          const res = await api.get(endpoint, { signal: controller.signal });
-          console.log(`Users loaded from: ${endpoint}`, res.data);
-
-          const possibleData = 
-            res.data.users || 
-            res.data.data || 
-            res.data.userList || 
-            res.data || 
-            [];
-
-          if (Array.isArray(possibleData)) {
-            loadedUsers = possibleData;
-            if (loadedUsers.length > 0) break;
+          const res = await api.get(endpoint);
+          const data = res.data.users || res.data.data || res.data || [];
+          if (Array.isArray(data) && data.length > 0) {
+            loadedUsers = data;
+            break;
           }
-        } catch (err) {
-          console.log(`Endpoint failed: ${endpoint}`, err.response?.status || err.message);
+        } catch (e) {
+          // continue
         }
       }
-
       setUsers(loadedUsers);
 
-      // Blogs
+      // Fetch blogs
       let loadedBlogs = [];
       try {
-        const blogsRes = await api.get('/blog?limit=20');
-        loadedBlogs = blogsRes.data.blogs || blogsRes.data.data || blogsRes.data || [];
-      } catch (err) {
-        console.log('Failed to load blogs');
+        const res = await api.get('/api/blog');
+        loadedBlogs = res.data.blogs || res.data.data || res.data || [];
+      } catch (e) {
+        console.log('Blogs fetch failed');
       }
       setBlogs(loadedBlogs);
 
-      // Public chat messages
-      let loadedMessages = [];
+      // Fetch public messages
+      let loadedPublic = [];
       try {
-        const chatRes = await api.get('/chatmessages');
-        loadedMessages = chatRes.data.chatmessages || chatRes.data.messages || chatRes.data.data || chatRes.data || [];
-      } catch (err) {
-        console.log('Failed to load public messages');
+        const res = await api.get('/chatmessages');
+        loadedPublic = res.data.messages || res.data.chatmessages || res.data.data || [];
+      } catch (e) {
+        console.log('Public messages fetch failed');
       }
-      setAllChatMessages(loadedMessages);
+      setPublicMessages(loadedPublic);
 
-      // Direct messages to admin
+      // Fetch direct messages
       let loadedDirect = [];
       try {
-        const directRes = await api.get('/chatmessages/direct');
-        loadedDirect = directRes.data.messages || directRes.data.chatmessages || directRes.data.data || [];
-      } catch (err) {
-        console.log('Failed to load direct messages');
+        const res = await api.get('/chatmessages/direct');
+        loadedDirect = res.data.messages || res.data.chatmessages || res.data.data || [];
+      } catch (e) {
+        console.log('Direct messages fetch failed');
       }
       setDirectMessages(loadedDirect);
 
-      // Reported messages (assuming field: reported: true or reports: array)
-      const reported = loadedMessages.filter(msg => 
-        msg.reported === true || (msg.reports && msg.reports.length > 0)
-      );
+      // Reported messages
+      const reported = loadedPublic.filter(m => m.reported || (m.reports && m.reports.length > 0));
       setReportedMessages(reported);
 
       // Update stats
@@ -159,20 +140,14 @@ const AdminDashboard = () => {
         totalUsers: loadedUsers.length,
         activeUsers: loadedUsers.filter(u => u.isActive !== false).length,
         totalBlogs: loadedBlogs.length,
-        totalMessages: loadedMessages.length,
+        totalMessages: loadedPublic.length,
         reportedCount: reported.length,
         directCount: loadedDirect.length
       });
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        setError('Request timed out — partial data loaded');
-      } else {
-        setError('Failed to load dashboard. Check backend routes.');
-      }
-      console.error('Dashboard error:', err);
+      setError('Failed to load dashboard data');
     } finally {
-      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -183,87 +158,110 @@ const AdminDashboard = () => {
       setLoading(false);
       return;
     }
-    fetchDashboardData();
+    fetchData();
   }, [isAdmin]);
 
-  // Auto-clear alerts
   useEffect(() => {
     if (success || error) {
       const timer = setTimeout(() => {
         setSuccess('');
         setError('');
-      }, 4000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [success, error]);
 
-  const handleEditUser = (userItem) => {
-    setSelectedUser(userItem);
-    setUserForm({
-      name: userItem.name || '',
-      email: userItem.email || '',
-      role: userItem.role || 'user',
-      isActive: userItem.isActive !== false,
-      password: ''
-    });
-    setOpenUserDialog(true);
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
 
-  const handleSaveUser = async () => {
+  const handleDeactivate = async (userId) => {
+    if (!window.confirm('Deactivate this user?')) return;
     try {
-      if (selectedUser) {
-        await api.put(`/api/admin/users/${selectedUser._id}`, userForm);
-        setSuccess('User updated successfully');
-      } else {
-        await api.post('/api/admin/users', userForm);
-        setSuccess('User created successfully');
-      }
-      setOpenUserDialog(false);
-      setSelectedUser(null);
-      setUserForm({ name: '', email: '', password: '', role: 'user', isActive: true });
-      fetchDashboardData();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save user');
+      await api.put(`/api/admin/users/${userId}/status`, { isActive: false });
+      setSuccess('User deactivated');
+      fetchData();
+    } catch (e) {
+      setError('Failed to deactivate user');
+    }
+  };
+
+  const handleActivate = async (userId) => {
+    if (!window.confirm('Activate this user?')) return;
+    try {
+      await api.put(`/api/admin/users/${userId}/status`, { isActive: true });
+      setSuccess('User activated');
+      fetchData();
+    } catch (e) {
+      setError('Failed to activate user');
     }
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Permanently delete this user?')) return;
+    if (!window.confirm('Delete this user permanently?')) return;
     try {
       await api.delete(`/api/admin/users/${userId}`);
       setSuccess('User deleted');
-      fetchDashboardData();
-    } catch (err) {
+      fetchData();
+    } catch (e) {
       setError('Failed to delete user');
     }
   };
 
-  const handleToggleUserStatus = async (userItem) => {
-    const action = userItem.isActive !== false ? 'block' : 'unblock';
-    if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
-    try {
-      await api.put(`/api/admin/users/${userItem._id}/status`, { isActive: userItem.isActive === false });
-      setSuccess(`User ${action}ed`);
-      fetchDashboardData();
-    } catch (err) {
-      setError('Failed to update status');
-    }
+  const handleViewMessage = (msg) => {
+    setSelectedMessage(msg);
+    setOpenMessageDialog(true);
   };
 
-  const handleDeleteChat = async (chatId) => {
-    if (!window.confirm('Delete this message permanently?')) return;
+  const handleDeleteMessage = async (msgId) => {
+    if (!window.confirm('Delete this message?')) return;
     try {
-      await api.delete(`/chatmessages/${chatId}`);
+      await api.delete(`/chatmessages/${msgId}`);
       setSuccess('Message deleted');
-      fetchDashboardData();
-    } catch (err) {
+      fetchData();
+    } catch (e) {
       setError('Failed to delete message');
     }
   };
 
-  const handleViewChat = (chat) => {
-    setSelectedChat(chat);
-    setOpenChatDialog(true);
+  const handleSendMassMessage = async () => {
+    if (!massContent.trim()) {
+      setError('Message content required');
+      return;
+    }
+    try {
+      const payload = {
+        content: massContent,
+        filterType: massFilter,
+        filterValue: massFilter === 'all' ? null : massValue
+      };
+      await api.post('/api/admin/mass-message', payload);
+      setSuccess('Mass message sent!');
+      setOpenMassDialog(false);
+      setMassContent('');
+      setMassValue('');
+    } catch (e) {
+      setError('Failed to send mass message');
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notifTitle.trim() || !notifBody.trim()) {
+      setError('Title and body required');
+      return;
+    }
+    try {
+      await api.post('/api/notifications/send', {
+        title: notifTitle,
+        body: notifBody
+      });
+      setSuccess('Notification sent to all users!');
+      setOpenNotifDialog(false);
+      setNotifTitle('');
+      setNotifBody('');
+    } catch (e) {
+      setError('Failed to send notification');
+    }
   };
 
   if (!isAdmin) {
@@ -277,10 +275,8 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
-        <Box textAlign="center">
-          <CircularProgress size={60} />
-          <Typography sx={{ mt: 2 }}>Loading admin dashboard...</Typography>
-        </Box>
+        <CircularProgress size={60} />
+        <Typography sx={{ ml: 2 }}>Loading dashboard...</Typography>
       </Container>
     );
   }
@@ -295,301 +291,271 @@ const AdminDashboard = () => {
 
       <Typography variant="h4" gutterBottom>Admin Dashboard</Typography>
 
-      {/* Stats */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'primary.main', color: 'white' }}>
-            <Typography variant="h4">{stats.totalUsers}</Typography>
-            <Typography>Total Users</Typography>
-          </Paper>
+      {/* Quick Actions */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        <Grid item>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<SendIcon />}
+            onClick={() => setOpenMassDialog(true)}
+          >
+            Send Mass Message
+          </Button>
         </Grid>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'success.main', color: 'white' }}>
-            <Typography variant="h4">{stats.activeUsers}</Typography>
-            <Typography>Active Users</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'info.main', color: 'white' }}>
-            <Typography variant="h4">{stats.totalBlogs}</Typography>
-            <Typography>Blogs</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'warning.main', color: 'white' }}>
-            <Typography variant="h4">{stats.totalMessages}</Typography>
-            <Typography>Messages</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'error.main', color: 'white' }}>
-            <Badge badgeContent={stats.reportedCount} color="default">
-              <Typography variant="h4">{stats.reportedCount}</Typography>
-            </Badge>
-            <Typography>Reported</Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs= {12} sm={6} md={2}>
-          <Paper sx={{ p: 3, textAlign: 'center', bgcolor: 'secondary.main', color: 'white' }}>
-            <Badge badgeContent={stats.directCount} color="default">
-              <Typography variant="h4">{stats.directCount}</Typography>
-            </Badge>
-            <Typography>Direct Msgs</Typography>
-          </Paper>
+        <Grid item>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<NotificationsActiveIcon />}
+            onClick={() => setOpenNotifDialog(true)}
+          >
+            Send Notification
+          </Button>
         </Grid>
       </Grid>
 
-      {/* Users Management */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5">Users Management</Typography>
-          <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => {
-            setSelectedUser(null);
-            setUserForm({ name: '', email: '', password: '', role: 'user', isActive: true });
-            setOpenUserDialog(true);
-          }}>
-            Add User
-          </Button>
+      <TabContext value={tabValue}>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs value={tabValue} onChange={handleTabChange} variant="scrollable" scrollButtons="auto">
+            <Tab label={`Users (${stats.totalUsers})`} value="users" />
+            <Tab label={`Reported (${stats.reportedCount})`} value="reported" />
+            <Tab label={`Blogs (${stats.totalBlogs})`} value="blogs" />
+            <Tab label={`Direct (${stats.directCount})`} value="direct" />
+          </Tabs>
         </Box>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Joined</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {users.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography color="text.secondary" sx={{ py: 4 }}>
-                      No users found.<br />
-                      <Typography variant="body2">
-                        Check if your backend has a users endpoint like /users or /admin/users
-                      </Typography>
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                users.map((u) => (
-                  <TableRow key={u._id || u.id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {u.name || 'No name'}
-                        {u._id === user?._id && <Chip label="You" size="small" color="primary" />}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{u.email || 'No email'}</TableCell>
-                    <TableCell>
-                      <Chip label={u.role || 'user'} color={u.role === 'admin' ? 'primary' : 'default'} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={u.isActive !== false ? 'Active' : 'Blocked'} color={u.isActive !== false ? 'success' : 'error'} size="small" />
-                    </TableCell>
-                    <TableCell>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => handleEditUser(u)}><EditIcon /></IconButton>
-                      <IconButton size="small" onClick={() => handleToggleUserStatus(u)}>
-                        {u.isActive !== false ? <BlockIcon /> : <CheckCircleIcon />}
-                      </IconButton>
-                      {u._id !== user?._id && (
-                        <IconButton size="small" color="error" onClick={() => handleDeleteUser(u._id)}><DeleteIcon /></IconButton>
-                      )}
-                    </TableCell>
+
+        <TabPanel value="users">
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom>User Management</Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Role</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Course</TableCell>
+                    <TableCell>Location</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+                </TableHead>
+                <TableBody>
+                  {users.map((u) => (
+                    <TableRow key={u._id}>
+                      <TableCell>{u.name}</TableCell>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell><Chip label={u.role} size="small" /></TableCell>
+                      <TableCell>
+                        <Chip label={u.isActive !== false ? 'Active' : 'Blocked'} color={u.isActive !== false ? 'success' : 'error'} size="small" />
+                      </TableCell>
+                      <TableCell>{u.course || 'N/A'}</TableCell>
+                      <TableCell>{u.location || 'N/A'}</TableCell>
+                      <TableCell>
+                        {u.isActive !== false ? (
+                          <Tooltip title="Deactivate">
+                            <IconButton onClick={() => handleDeactivate(u._id)}><BlockIcon /></IconButton>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Activate">
+                            <IconButton onClick={() => handleActivate(u._id)}><CheckCircleIcon color="success" /></IconButton>
+                          </Tooltip>
+                        )}
+                        <Tooltip title="Delete">
+                          <IconButton color="error" onClick={() => handleDeleteUser(u._id)}><DeleteIcon /></IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </TabPanel>
 
-      {/* Reported Messages */}
-      {reportedMessages.length > 0 && (
-        <Paper sx={{ p: 3, mb: 4, border: '2px solid #d32f2f' }}>
-          <Typography variant="h5" sx={{ mb: 3, color: '#d32f2f', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FlagIcon /> Reported Messages ({reportedMessages.length})
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>From</TableCell>
-                  <TableCell>Message</TableCell>
-                  <TableCell>Reports</TableCell>
-                  <TableCell>Time</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {reportedMessages.map((msg) => (
-                  <TableRow key={msg._id} sx={{ bgcolor: '#ffebee' }}>
-                    <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
-                    <TableCell sx={{ maxWidth: 300 }}>
-                      <Tooltip title={msg.content}><span>{msg.content.substring(0, 50)}...</span></Tooltip>
-                    </TableCell>
-                    <TableCell>{msg.reports?.length || 1}</TableCell>
-                    <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
-                      <IconButton size="small" color="error" onClick={() => handleDeleteChat(msg._id)}><DeleteIcon /></IconButton>
-                    </TableCell>
+        <TabPanel value="reported">
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom>Reported Messages</Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>From</TableCell>
+                    <TableCell>Message</TableCell>
+                    <TableCell>Reason</TableCell>
+                    <TableCell>Time</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
+                </TableHead>
+                <TableBody>
+                  {reportedMessages.map((msg) => (
+                    <TableRow key={msg._id}>
+                      <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
+                      <TableCell>{msg.content.substring(0, 100)}...</TableCell>
+                      <TableCell>{msg.reports?.[0]?.reason || 'N/A'}</TableCell>
+                      <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleViewMessage(msg)}><VisibilityIcon /></IconButton>
+                        <IconButton color="error" onClick={() => handleDeleteMessage(msg._id)}><DeleteIcon /></IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </TabPanel>
 
-      {/* Direct Messages */}
-      {directMessages.length > 0 && (
-        <Paper sx={{ p: 3, mb: 4, border: '2px solid #7b1fa2' }}>
-          <Typography variant="h5" sx={{ mb: 3, color: '#7b1fa2', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <MailIcon /> Direct Messages to Admin ({directMessages.length})
-          </Typography>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>From</TableCell>
-                  <TableCell>Message</TableCell>
-                  <TableCell>Time</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {directMessages.map((msg) => (
-                  <TableRow key={msg._id}>
-                    <TableCell>{msg.sender?.name || msg.senderName || 'User'}</TableCell>
-                    <TableCell sx={{ maxWidth: 400 }}>{msg.content}</TableCell>
-                    <TableCell>{new Date(msg.createdAt || msg.timestamp).toLocaleString()}</TableCell>
-                    <TableCell><IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton></TableCell>
+        <TabPanel value="blogs">
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom>Recent Blogs</Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Author</TableCell>
+                    <TableCell>Date</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
+                </TableHead>
+                <TableBody>
+                  {blogs.map((blog) => (
+                    <TableRow key={blog._id}>
+                      <TableCell>{blog.title}</TableCell>
+                      <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
+                      <TableCell>{new Date(blog.createdAt).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </TabPanel>
 
-      {/* Recent Public Messages */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Recent Public Messages</Typography>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>From</TableCell>
-                <TableCell>Message</TableCell>
-                <TableCell>Time</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {allChatMessages.slice(0, 15).map((msg) => (
-                <TableRow key={msg._id}>
-                  <TableCell>{msg.sender?.name || 'Unknown'}</TableCell>
-                  <TableCell sx={{ maxWidth: 500 }}>{msg.content}</TableCell>
-                  <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
-                  <TableCell>
-                    <IconButton size="small" onClick={() => handleViewChat(msg)}><VisibilityIcon /></IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleDeleteChat(msg._id)}><DeleteIcon /></IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+        <TabPanel value="direct">
+          <Paper sx={{ p: 3 }}>
+            <Typography variant="h5" gutterBottom>Direct Messages</Typography>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>From</TableCell>
+                    <TableCell>Message</TableCell>
+                    <TableCell>Time</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {directMessages.map((msg) => (
+                    <TableRow key={msg._id}>
+                      <TableCell>{msg.sender?.name || msg.senderName}</TableCell>
+                      <TableCell>{msg.content}</TableCell>
+                      <TableCell>{new Date(msg.createdAt).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleViewMessage(msg)}><VisibilityIcon /></IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </TabPanel>
+      </TabContext>
 
-      {/* Recent Blogs */}
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h5" sx={{ mb: 3 }}>Recent Blogs</Typography>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Title</TableCell>
-                <TableCell>Author</TableCell>
-                <TableCell>Views / Likes</TableCell>
-                <TableCell>Date</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {blogs.slice(0, 10).map((blog) => (
-                <TableRow key={blog._id}>
-                  <TableCell>{blog.title}</TableCell>
-                  <TableCell>{blog.author?.name || 'Unknown'}</TableCell>
-                  <TableCell>
-                    <Badge badgeContent={blog.views || 0} color="primary" sx={{ mr: 2 }} />
-                    <Badge badgeContent={blog.likes || 0} color="secondary" />
-                  </TableCell>
-                  <TableCell>{new Date(blog.createdAt).toLocaleDateString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Dialogs */}
-      <Dialog open={openUserDialog} onClose={() => setOpenUserDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{selectedUser ? 'Edit User' : 'Create New User'}</DialogTitle>
-        <DialogContent>
-          <TextField fullWidth label="Name" value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} margin="normal" required />
-          <TextField fullWidth label="Email" type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} margin="normal" required />
-          <TextField fullWidth label="Password" type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} margin="normal"
-            helperText={selectedUser ? "Leave blank to keep current" : "Required"} />
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Role</InputLabel>
-            <Select value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
-              <MenuItem value="user">User</MenuItem>
-              <MenuItem value="admin">Admin</MenuItem>
-              <MenuItem value="moderator">Moderator</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Status</InputLabel>
-            <Select value={userForm.isActive} onChange={(e) => setUserForm({ ...userForm, isActive: e.target.value })}>
-              <MenuItem value={true}>Active</MenuItem>
-              <MenuItem value={false}>Blocked</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenUserDialog(false)}>Cancel</Button>
-          <Button onClick={handleSaveUser} variant="contained">Save</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={openChatDialog} onClose={() => setOpenChatDialog(false)} maxWidth="md" fullWidth>
+      {/* Message View Dialog */}
+      <Dialog open={openMessageDialog} onClose={() => setOpenMessageDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>Message Details</DialogTitle>
-        <DialogContent dividers>
-          {selectedChat && (
+        <DialogContent>
+          {selectedMessage && (
             <Box>
-              <Typography><strong>From:</strong> {selectedChat.sender?.name || selectedChat.senderName || 'Unknown'}</Typography>
-              <Typography><strong>Type:</strong> {selectedChat.type === 'direct' ? 'Direct to Admin' : 'Public'}</Typography>
-              <Typography><strong>Time:</strong> {new Date(selectedChat.createdAt || selectedChat.timestamp).toLocaleString()}</Typography>
-              {selectedChat.reported && <Alert severity="warning" sx={{ mt: 2 }}>Reported by users</Alert>}
-              <Box sx={{ mt: 3, p: 3, bgcolor: '#f5f5f5', borderRadius: 2 }}>
-                <Typography variant="body1">{selectedChat.content}</Typography>
+              <Typography><strong>From:</strong> {selectedMessage.sender?.name || 'Unknown'}</Typography>
+              <Typography><strong>Time:</strong> {new Date(selectedMessage.createdAt).toLocaleString()}</Typography>
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+                <Typography>{selectedMessage.content}</Typography>
               </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenChatDialog(false)}>Close</Button>
-          {selectedChat && (
-            <Button color="error" onClick={() => { handleDeleteChat(selectedChat._id); setOpenChatDialog(false); }}>
+          <Button onClick={() => setOpenMessageDialog(false)}>Close</Button>
+          {selectedMessage && (
+            <Button color="error" onClick={() => {
+              handleDeleteMessage(selectedMessage._id);
+              setOpenMessageDialog(false);
+            }}>
               Delete
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Mass Message Dialog */}
+      <Dialog open={openMassDialog} onClose={() => setOpenMassDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Send Mass Message</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Message"
+            multiline
+            rows={4}
+            fullWidth
+            value={massContent}
+            onChange={(e) => setMassContent(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Send To</InputLabel>
+            <Select value={massFilter} onChange={(e) => setMassFilter(e.target.value)}>
+              <MenuItem value="all">All Users</MenuItem>
+              <MenuItem value="course">By Course</MenuItem>
+              <MenuItem value="location">By Location</MenuItem>
+            </Select>
+          </FormControl>
+          {massFilter !== 'all' && (
+            <TextField
+              label={`Enter ${massFilter}`}
+              fullWidth
+              value={massValue}
+              onChange={(e) => setMassValue(e.target.value)}
+              sx={{ mt: 2 }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenMassDialog(false)}>Cancel</Button>
+          <Button onClick={handleSendMassMessage} variant="contained" color="secondary">
+            Send
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Notification Dialog */}
+      <Dialog open={openNotifDialog} onClose={() => setOpenNotifDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Send Global Notification</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Title"
+            fullWidth
+            value={notifTitle}
+            onChange={(e) => setNotifTitle(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+          <TextField
+            label="Body"
+            multiline
+            rows={4}
+            fullWidth
+            value={notifBody}
+            onChange={(e) => setNotifBody(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenNotifDialog(false)}>Cancel</Button>
+          <Button onClick={handleSendNotification} variant="contained">
+            Send Notification
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>
