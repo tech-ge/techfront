@@ -808,7 +808,7 @@ const ChatPageNew = () => {
       </Dialog>
 
       {/* Admin Sidebar */}
-      <Collapse in={adminSidebarOpen} orientation="horizontal" sx={{ position: 'absolute', right: 0, top: 30px, bottom: 0, zIndex: 1000, height: '100%' }}>
+      <Collapse in={adminSidebarOpen} orientation="horizontal" sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, zIndex: 1000, height: '100%' }}>
         <Paper elevation={3} sx={{ height: '100%', width: adminMinimized ? '60px' : '350px', display: 'flex', flexDirection: 'column', transition: 'width 0.3s', borderRadius: '12px 0 0 12px', overflow: 'hidden' }}>
           <Box sx={{ p: 2, backgroundColor: '#d32f2f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '64px' }}>
             {!adminMinimized ? (
