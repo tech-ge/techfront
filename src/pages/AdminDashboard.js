@@ -25,10 +25,10 @@ import {
   Tooltip,
   Badge,
   Grid,
-  FormControl,   // ← FIXED: Added
-  InputLabel,    // ← FIXED: Added
-  Select,        // ← FIXED: Added
-  MenuItem       // ← FIXED: Added
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 import TabPanel from '@mui/lab/TabPanel';
 import TabContext from '@mui/lab/TabContext';
@@ -45,34 +45,28 @@ import api from '../utils/api';
 
 const AdminDashboard = () => {
   const { user, isAdmin } = useAuth();
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [tabValue, setTabValue] = useState('users');
-
   // Data
   const [users, setUsers] = useState([]);
   const [publicMessages, setPublicMessages] = useState([]);
   const [reportedMessages, setReportedMessages] = useState([]);
   const [directMessages, setDirectMessages] = useState([]);
   const [blogs, setBlogs] = useState([]);
-
   // Dialogs
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [openMessageDialog, setOpenMessageDialog] = useState(false);
-
   // Mass Message
   const [openMassDialog, setOpenMassDialog] = useState(false);
   const [massContent, setMassContent] = useState('');
   const [massFilter, setMassFilter] = useState('all'); // all, course, location
   const [massValue, setMassValue] = useState('');
-
   // Notification
   const [openNotifDialog, setOpenNotifDialog] = useState(false);
   const [notifTitle, setNotifTitle] = useState('');
   const [notifBody, setNotifBody] = useState('');
-
   // Stats
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -100,7 +94,7 @@ const AdminDashboard = () => {
             break;
           }
         } catch (e) {
-          // continue
+          // continue trying next endpoint
         }
       }
       setUsers(loadedUsers);
@@ -135,7 +129,7 @@ const AdminDashboard = () => {
       }
       setDirectMessages(loadedDirect);
 
-      // Reported messages
+      // Reported messages (filtered from public chat)
       const reported = loadedPublic.filter(m => m.reported || (m.reports && m.reports.length > 0));
       setReportedMessages(reported);
 
@@ -148,7 +142,6 @@ const AdminDashboard = () => {
         reportedCount: reported.length,
         directCount: loadedDirect.length
       });
-
     } catch (err) {
       setError('Failed to load dashboard data');
     } finally {
@@ -292,7 +285,6 @@ const AdminDashboard = () => {
           {error || success}
         </Alert>
       )}
-
       <Typography variant="h4" gutterBottom>Admin Dashboard</Typography>
 
       {/* Quick Actions */}
