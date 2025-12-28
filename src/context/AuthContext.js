@@ -19,27 +19,27 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = useCallback(async () => {
     if (!token) {
+      setUser(null);
       setLoading(false);
       return;
     }
+
     try {
       const response = await api.get('/api/auth/me');
-      if (response.data?.user) {
+      if (response.data.success && response.data.user) {
         setUser(response.data.user);
       } else {
         logout();
       }
     } catch (error) {
-      console.error('Failed to fetch user:', error);
-      if (error.response?.status === 401) {
-        logout();
-      }
+      console.error('fetchUser error:', error);
+      logout();
     } finally {
       setLoading(false);
     }
   }, [token, logout]);
 
-  // Update headers whenever token changes
+  // Set header and fetch user when token changes
   useEffect(() => {
     if (token) {
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -54,48 +54,43 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     try {
       const response = await api.post('/api/auth/login', { email, password });
-      const { success, token: newToken, user: loggedInUser, message } = response.data;
+      if (response.data.success && response.data.token) {
+        const newToken = response.data.token;
+        const loggedInUser = response.data.user;
 
-      if (!success || !newToken) {
-        return { success: false, message: message || 'Login failed' };
+        // Set everything immediately
+        localStorage.setItem('token', newToken);
+        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        setToken(newToken);
+        setUser(loggedInUser);
+
+        return { success: true };
       }
-
-      // Save token and set header immediately
-      localStorage.setItem('token', newToken);
-      api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-      setToken(newToken);
-      setUser(loggedInUser);
-
-      return { success: true, user: loggedInUser };
+      return { success: false, message: response.data.message || 'Login failed' };
     } catch (error) {
       console.error('Login error:', error);
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Invalid email or password'
-      };
+      return { success: false, message: error.response?.data?.message || 'Invalid credentials' };
     }
   };
 
   const register = async (userData) => {
     try {
       const response = await api.post('/api/auth/register', userData);
-      const { success, token: newToken, user: newUser, message } = response.data;
+      if (response.data.success && response.data.token) {
+        const newToken = response.data.token;
+        const newUser = response.data.user;
 
-      if (success && newToken && newUser) {
         localStorage.setItem('token', newToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         setToken(newToken);
         setUser(newUser);
-        return { success: true, user: newUser };
-      }
 
-      return { success: true, message: message || 'Registration successful! Please log in.' };
+        return { success: true };
+      }
+      return { success: true, message: response.data.message || 'Registered! Login now.' };
     } catch (error) {
       console.error('Register error:', error);
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Registration failed'
-      };
+      return { success: false, message: error.response?.data?.message || 'Registration failed' };
     }
   };
 
@@ -103,7 +98,6 @@ export const AuthProvider = ({ children }) => {
     user,
     setUser,
     loading,
-    token,
     login,
     register,
     logout,
