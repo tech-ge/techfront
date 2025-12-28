@@ -27,7 +27,6 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('');
 
   const handleChange = (e) => {
     setFormData({
@@ -35,70 +34,29 @@ const LoginPage = () => {
       [e.target.name]: e.target.value
     });
     setError('');
-    setDebugInfo('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.email || !formData.password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
     setLoading(true);
     setError('');
-    setDebugInfo('');
 
-    const result = await login(formData.email, formData.password);
-    
+    const result = await login(formData.email.trim(), formData.password);
+
     if (result.success) {
-      setDebugInfo('Login successful! Redirecting...');
-      setTimeout(() => navigate('/dashboard'), 1000);
+      // Optional: redirect admin to admin dashboard
+      // You can check user role from localStorage or AuthContext if needed
+      navigate('/dashboard');
     } else {
-      setError(result.message);
-      setDebugInfo('Login failed.try again later');
+      setError(result.message || 'Invalid email or password');
     }
-    
-    setLoading(false);
-  };
 
-  const handleAdminLogin = async () => {
-    setLoading(true);
-    setError('');
-    setDebugInfo('Attempting admin login...');
-    
-    const result = await login('admin@example.com', 'Admin@123456');
-    
-    if (result.success) {
-      setDebugInfo('login successful! Redirecting...');
-      setTimeout(() => navigate('/admin'), 1000);
-    } else {
-      setError('login failed: ' + (result.message || 'Unknown error'));
-      setDebugInfo('unknown error');
-    }
-    
     setLoading(false);
-  };
-
-  const handleTestDirectLogin = async () => {
-    setDebugInfo('Testing direct API call...');
-    
-    try {
-      const response = await fetch('https://techback-production.up.railway.app/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: 'admin@example.com',
-          password: 'Admin@123456'
-        })
-      });
-      
-      const data = await response.json();
-      setDebugInfo(`API Response: ${JSON.stringify(data)}`);
-      
-      if (data.success) {
-        // Save token manually
-        localStorage.setItem('token', data.token);
-        setDebugInfo('saved to localStorage.Login again.');
-      }
-    } catch (err) {
-      setDebugInfo(`API Error: ${err.message}`);
-    }
   };
 
   return (
@@ -115,20 +73,14 @@ const LoginPage = () => {
           <Typography component="h1" variant="h4" align="center" gutterBottom>
             Login to TechG
           </Typography>
-          
+
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 3 }}>
             Exclusive platform for Kenyan science students
           </Typography>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
               {error}
-            </Alert>
-          )}
-
-          {debugInfo && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {debugInfo}
             </Alert>
           )}
 
@@ -152,7 +104,7 @@ const LoginPage = () => {
                 ),
               }}
             />
-            
+
             <TextField
               margin="normal"
               required
@@ -194,7 +146,7 @@ const LoginPage = () => {
               {loading ? 'Logging in...' : 'Login'}
             </Button>
 
-            <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Box sx={{ textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
                 Don't have an account?{' '}
                 <Link to="/register" style={{ textDecoration: 'none' }}>
@@ -203,14 +155,6 @@ const LoginPage = () => {
                   </Typography>
                 </Link>
               </Typography>
-            </Box>
-
-            {/* Test Login Buttons */}
-            <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
-              <Typography variant="body2" color="text.secondary" align="center" gutterBottom>
-                Quick Test Logins
-              </Typography>
-              
             </Box>
           </Box>
         </Paper>
