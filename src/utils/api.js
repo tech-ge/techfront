@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// FIXED: Use the correct backend URL
-const API_BASE_URL = 'https://techback-production.up.railway.app/api';
+// REMOVED /api from baseURL because chat uses /chatmessages (no /api prefix)
+const API_BASE_URL = 'https://techback-production.up.railway.app';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,10 +9,10 @@ const api = axios.create({
     'Content-Type': 'application/json'
   },
   withCredentials: true,
-  timeout: 10000 // 10 second timeout
+  timeout: 15000
 });
 
-// Request interceptor to add auth token
+// Add auth token to every request
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -24,21 +24,14 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor to handle errors
+// Handle 401 unauthorized
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.log('Unauthorized, logging out...');
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
-    
-    // Handle network errors
-    if (error.message === 'Network Error') {
-      console.error('Network error - check backend connection');
-    }
-    
     return Promise.reject(error);
   }
 );
